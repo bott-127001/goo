@@ -1,0 +1,8 @@
+fastapi
+pydantic<2.0.0
+uvicorn[standard]
+python-dotenv
+requests
+apscheduler
+numpy
+pandas

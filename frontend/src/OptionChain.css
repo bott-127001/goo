@@ -1,0 +1,82 @@
+.option-chain-page {
+    padding: 20px;
+    color: white;
+    background-color: #1e1e1e;
+    min-height: 100vh;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.option-chain-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.option-chain-table-container {
+    width: 100%;
+    max-width: 1600px; /* Increase max-width for the wider table */
+    margin: 0 auto;
+    background-color: #2d2d2d;
+    border-radius: 8px;
+    padding: 20px;
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 12px 15px;
+    text-align: center;
+    border-bottom: 1px solid #444;
+}
+
+th {
+    background-color: #3c3c3c;
+    color: #00aaff;
+    font-weight: bold;
+}
+
+tbody tr:hover {
+    background-color: #383838;
+}
+
+.strike-price {
+    font-weight: bold;
+    background-color: #444; /* Make strike column stand out */
+}
+
+.strike-header {
+    font-weight: bold;
+}
+
+.highlight-atm {
+    background-color: #4a4a2a; /* Yellowish highlight */
+}
+
+.highlight-monitored {
+    background-color: #2a4a4a; /* Bluish highlight */
+    font-weight: bold;
+}
+
+.call-side {
+    color: #4caf50; /* Green for calls */
+}
+
+.put-side {
+    color: #f44336; /* Red for puts */
+}
+
+/* Inherit nav styles from Dashboard.css */
+.dashboard-nav {
+    margin-top: 15px;
+}
+
+.dashboard-nav a {
+    color: #00aaff;
+    text-decoration: none;
+    margin: 0 15px;
+    font-size: 1.2rem;
+}
