@@ -449,6 +449,19 @@ async def websocket_endpoint(websocket: WebSocket, user_name: str):
 
 app.include_router(api_router)
 
+# Serve specific root-level static files directly
+@app.get("/manifest.json")
+async def serve_manifest():
+    return FileResponse("frontend/build/manifest.json")
+
+@app.get("/favicon.ico")
+async def serve_favicon():
+    return FileResponse("frontend/build/favicon.ico")
+
+@app.get("/logo192.png")
+async def serve_logo192():
+    return FileResponse("frontend/build/logo192.png")
+
 # Mount the static files directory for assets like JS, CSS, images
 app.mount("/static", StaticFiles(directory="frontend/build/static"), name="static")
 
