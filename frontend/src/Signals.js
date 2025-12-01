@@ -16,7 +16,7 @@ const Signals = () => {
       return;
     }
 
-    const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+    const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || window.location.origin;
     const fetchData = async () => {
       try {
         const [statusRes, signalsRes] = await Promise.all([

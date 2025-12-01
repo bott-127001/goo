@@ -25,7 +25,7 @@ const Dashboard = () => {
       return;
     }
 
-    const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+    const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || window.location.origin;
     const wsBaseUrl = apiBaseUrl.replace(/^http/, 'ws');
 
     const wsURL = `${wsBaseUrl}/ws/${userName}`; // This constructs ws:// or wss:// automatically

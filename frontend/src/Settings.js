@@ -18,7 +18,7 @@ const Settings = () => {
   const [message, setMessage] = useState('');
   const location = useLocation();
 
-  const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+  const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || window.location.origin;
   useEffect(() => {
     const fetchSettings = async () => {
       try {

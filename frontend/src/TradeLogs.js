@@ -9,7 +9,7 @@ const TradeLogs = () => {
   useEffect(() => {
     const fetchLogs = async () => {
       try {
-        const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+        const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || window.location.origin;
         const response = await fetch(`${apiBaseUrl}/tradelogs`);
         const data = await response.json();
         setLogs(data);

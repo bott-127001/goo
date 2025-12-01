@@ -16,7 +16,7 @@ const OptionChain = () => {
       return;
     }
 
-    const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+    const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || window.location.origin;
     const fetchData = async () => {
       try {
         const [chainRes, statusRes] = await Promise.all([
