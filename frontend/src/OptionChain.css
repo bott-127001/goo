@@ -94,4 +94,10 @@ tbody tr:hover {
     .dashboard-nav a {
         margin: 5px 10px 5px 0; /* Match dashboard styles */
     }
+
+    /* This ensures the nav container wraps correctly */
+    .dashboard-nav {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
 }
