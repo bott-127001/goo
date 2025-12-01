@@ -258,10 +258,6 @@ def run_logic_controller(user_name: str):
             user_state["candidate_setup"] = candidate
     print(f"[{user_name}] Logic Controller Update: Bias={bias}, MarketType={market_type}, Candidate={candidate}")
 
-@app.get("/")
-def read_root():
-    return {"message": "Greeks-Based Trading Tool Backend is running."}
-
 @app.get("/profile")
 def get_user_profile():
     """
@@ -446,10 +442,6 @@ async def websocket_endpoint(websocket: WebSocket, user_name: str):
         print(f"WebSocket Error: {e}")
     finally:
         print("Client disconnected from WebSocket.")
-
-# --- Mount Static Files for Frontend ---
-# This must be the very last thing, after all other routes are defined.
-app.mount("/", StaticFiles(directory="frontend/build", html=True), name="static")
 
 # --- Mount Static Files for Frontend ---
 # This must be the very last thing, after all other routes are defined.
