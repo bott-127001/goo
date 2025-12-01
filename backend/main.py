@@ -449,13 +449,13 @@ async def websocket_endpoint(websocket: WebSocket, user_name: str):
 
 app.include_router(api_router)
 
+# --- Mount Static Files for Frontend ---
+# This must be the very last thing, after all other routes are defined.
+app.mount("/", StaticFiles(directory="frontend/build", html=True), name="static")
+
 @app.get("/{full_path:path}")
 async def serve_react_app(full_path: str):
     """
     Catch-all endpoint to serve the React app's index.html for any non-API, non-file path.
     """
     return FileResponse("frontend/build/index.html")
-
-# --- Mount Static Files for Frontend ---
-# This must be the very last thing, after all other routes are defined.
-app.mount("/", StaticFiles(directory="frontend/build", html=True), name="static")
