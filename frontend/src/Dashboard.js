@@ -28,8 +28,7 @@ const Dashboard = () => {
     const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
     const wsBaseUrl = apiBaseUrl.replace(/^http/, 'ws');
 
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws';
-    const wsURL = `${wsBaseUrl}/ws/${userName}`;
+    const wsURL = `${wsBaseUrl}/ws/${userName}`; // This constructs ws:// or wss:// automatically
 
     const ws = new WebSocket(wsURL);
 
