@@ -1,4 +1,5 @@
 import React from 'react';
+import './Login.css';
 
 const Login = () => {
   const samarthClientId = process.env.REACT_APP_SAMARTH_UPSTOX_CLIENT_ID;

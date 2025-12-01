@@ -407,6 +407,28 @@ def write_settings(settings_update: SettingsUpdate):
     database.update_setting(settings_update.key, settings_update.value)
     return {"status": "success", "key": settings_update.key, "value": settings_update.value}
 
+class LogoutRequest(BaseModel):
+    user_name: str
+
+@api_router.post("/logout")
+def logout_user(request: LogoutRequest):
+    """
+    Stops the background scheduler for a user and clears their session state.
+    """
+    user_name = request.user_name
+    user_state = app_state["users"].get(user_name)
+
+    if not user_state:
+        return {"status": "ok", "message": "User already logged out."}
+
+    scheduler = user_state.get("scheduler")
+    if scheduler and scheduler.running:
+        scheduler.shutdown()
+        print(f"Scheduler for user '{user_name}' has been shut down.")
+
+    del app_state["users"][user_name]
+    return {"status": "ok", "message": f"User {user_name} logged out successfully."}
+
 @api_router.websocket("/ws/{user_name}")
 async def websocket_endpoint(websocket: WebSocket, user_name: str):
     """
