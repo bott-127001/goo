@@ -5,7 +5,9 @@ const Login = () => {
   const prajwalClientId = process.env.REACT_APP_PRAJWAL_UPSTOX_CLIENT_ID;
 
   const handleLogin = (user) => {
-    const redirectUri = process.env.REACT_APP_UPSTOX_REDIRECT_URI;
+    // Dynamically construct the redirect URI based on the API's location.
+    const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || window.location.origin;
+    const redirectUri = `${apiBaseUrl}/auth/upstox/callback`;
     let clientId;
 
     if (user === 'samarth') {
