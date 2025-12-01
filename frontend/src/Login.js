@@ -6,8 +6,8 @@ const Login = () => {
 
   const handleLogin = (user) => {
     // Dynamically construct the redirect URI based on the API's location.
-    const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || window.location.origin;
-    const redirectUri = `${apiBaseUrl}/auth/upstox/callback`;
+    const appBaseUrl = window.location.origin; // e.g., https://goo-eca7.onrender.com
+    const redirectUri = `${appBaseUrl}/auth/upstox/callback`;
     let clientId;
 
     if (user === 'samarth') {
