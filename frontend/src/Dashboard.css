@@ -119,6 +119,11 @@
 
     .dashboard-nav {
         flex-wrap: wrap;
+        justify-content: flex-start; /* Align items to the start */
+    }
+
+    .dashboard-nav a, .logout-button {
+        margin: 5px 10px 5px 0; /* Adjust margin for wrapped items */
     }
 
     .dashboard-grid {

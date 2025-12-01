@@ -64,4 +64,8 @@ tbody tr:hover {
     .logs-table-container {
         padding: 10px;
     }
+
+    .dashboard-nav a {
+        margin: 5px 10px 5px 0; /* Match dashboard styles */
+    }
 }
