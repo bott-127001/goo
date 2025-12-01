@@ -54,3 +54,14 @@ tbody tr:hover {
     margin: 0 15px;
     font-size: 1.2rem;
 }
+
+/* --- Mobile Responsiveness --- */
+@media (max-width: 768px) {
+    .logs-page {
+        padding: 10px;
+    }
+
+    .logs-table-container {
+        padding: 10px;
+    }
+}

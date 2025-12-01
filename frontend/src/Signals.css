@@ -58,3 +58,14 @@
 .checklist-container li.failed {
     color: #f44336; /* Red */
 }
+
+/* --- Mobile Responsiveness --- */
+@media (max-width: 768px) {
+    .signals-page {
+        padding: 10px;
+    }
+
+    .checklists-grid {
+        grid-template-columns: 1fr; /* Stack checklists vertically */
+    }
+}

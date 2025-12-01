@@ -99,3 +99,29 @@
 .logout-button:hover {
     background-color: #cc0000;
 }
+
+/* --- Mobile Responsiveness --- */
+@media (max-width: 768px) {
+    .dashboard {
+        padding: 10px;
+    }
+
+    .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+    }
+
+    .dashboard-header h1 {
+        font-size: 1.8rem;
+        margin-bottom: 15px;
+    }
+
+    .dashboard-nav {
+        flex-wrap: wrap;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr; /* Stack widgets in a single column */
+    }
+}

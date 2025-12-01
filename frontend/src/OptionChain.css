@@ -80,3 +80,14 @@ tbody tr:hover {
     margin: 0 15px;
     font-size: 1.2rem;
 }
+
+/* --- Mobile Responsiveness --- */
+@media (max-width: 768px) {
+    .option-chain-page {
+        padding: 10px;
+    }
+
+    .option-chain-table-container {
+        padding: 10px;
+    }
+}
