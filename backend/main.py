@@ -450,3 +450,7 @@ async def websocket_endpoint(websocket: WebSocket, user_name: str):
 # --- Mount Static Files for Frontend ---
 # This must be the very last thing, after all other routes are defined.
 app.mount("/", StaticFiles(directory="frontend/build", html=True), name="static")
+
+# --- Mount Static Files for Frontend ---
+# This must be the very last thing, after all other routes are defined.
+app.mount("/", StaticFiles(directory="frontend/build", html=True), name="static")
