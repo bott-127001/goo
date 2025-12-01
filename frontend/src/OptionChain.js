@@ -1,22 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import './OptionChain.css';
 
 const OptionChain = () => {
   const [chainData, setChainData] = useState([]);
   const [status, setStatus] = useState({});
+  const location = useLocation();
 
   useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const userName = searchParams.get('user');
+
+    if (!userName) {
+      console.error("User not found in URL for Option Chain.");
+      return;
+    }
+
     const fetchData = async () => {
       try {
         const [chainRes, statusRes] = await Promise.all([
-          fetch('/option-chain'),
-          fetch('/status'),
+          fetch(`http://localhost:8000/option-chain/${userName}`),
+          fetch('http://localhost:8000/status'),
         ]);
         const chainData = await chainRes.json();
         const statusData = await statusRes.json();
         setChainData(chainData);
-        setStatus(statusData);
+        // Extract the status for the current user
+        if (statusData[userName]) {
+          setStatus(statusData[userName]);
+        }
       } catch (error) {
         console.error("Error fetching option chain data:", error);
       }
@@ -26,7 +38,7 @@ const OptionChain = () => {
     const interval = setInterval(fetchData, 5000); // Refresh every 5 seconds
 
     return () => clearInterval(interval);
-  }, []);
+  }, [location.search]);
 
   const getRowClass = (strike) => {
     if (!status.candidate_setup) return '';
@@ -48,11 +60,11 @@ const OptionChain = () => {
       <header className="option-chain-header">
         <h1>Live Option Chain</h1>
         <nav className="dashboard-nav">
-          <Link to="/dashboard">Dashboard</Link>
-          <Link to="/signals">Signals</Link>
-          <Link to="/logs">Logs</Link>
-          <Link to="/settings">Settings</Link>
-          <Link to="/option-chain">Option Chain</Link>
+          <Link to={`/dashboard${location.search}`}>Dashboard</Link>
+          <Link to={`/signals${location.search}`}>Signals</Link>
+          <Link to={`/logs${location.search}`}>Logs</Link>
+          <Link to={`/settings${location.search}`}>Settings</Link>
+          <Link to={`/option-chain${location.search}`}>Option Chain</Link>
         </nav>
       </header>
 

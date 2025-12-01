@@ -1,33 +1,39 @@
 from collections import deque
+import copy
 
-# A simple in-memory dictionary to hold the application state.
-# For a single-user app, this is sufficient to store the access token.
-
-# Define the maximum size of our rolling buffers (e.g., last 5 minutes of data at 10s intervals)
 BUFFER_SIZE = 30 
 
+def get_default_user_state():
+    """Returns a new, default state structure for a single user."""
+    return {
+        "access_token": None,
+        "scheduler": None,
+        "price_buffer": deque(maxlen=BUFFER_SIZE),
+        "premium_buffer": deque(maxlen=BUFFER_SIZE),
+        "delta_buffer": deque(maxlen=BUFFER_SIZE),
+        "gamma_buffer": deque(maxlen=BUFFER_SIZE),
+        "theta_buffer": deque(maxlen=BUFFER_SIZE),
+        "iv_buffer": deque(maxlen=BUFFER_SIZE),
+        "candles_5min_buffer": deque(maxlen=100),
+        "bias": "Neutral",
+        "market_type": "Undetermined",
+        "candidate_setup": None,
+        "cooldown_until": None,
+    }
+
+# The global state now holds a dictionary of user-specific states.
 app_state = {
-    "access_token": None,
-    "scheduler": None, # To hold the background scheduler instance
-    
-    # Rolling buffers for live data
-    "price_buffer": deque(maxlen=BUFFER_SIZE),
-    "premium_buffer": deque(maxlen=BUFFER_SIZE), # Add this line
-    "delta_buffer": deque(maxlen=BUFFER_SIZE),
-    "gamma_buffer": deque(maxlen=BUFFER_SIZE),
-    "theta_buffer": deque(maxlen=BUFFER_SIZE),
-    "iv_buffer": deque(maxlen=BUFFER_SIZE),
-
-    # Buffer for 5-minute candles [timestamp, open, high, low, close]
-    "candles_5min_buffer": deque(maxlen=100), # Store last 100 5-min candles
-
-    # System Status
-    "bias": "Neutral",
-    "market_type": "Undetermined",
-
-    # Candidate Setup
-    "candidate_setup": None, # e.g., {"type": "Breakout_Bullish", "price": 22500, "status": "Pending"}
-
-    # Cooldown period after a trade is closed
-    "cooldown_until": None,
+    "users": {
+        # "samarth": get_default_user_state(),
+        # "prajwal": get_default_user_state(),
+    }
 }
+
+def get_user_state(user_name: str):
+    """
+    Retrieves the state for a specific user, creating it if it doesn't exist.
+    """
+    if user_name not in app_state["users"]:
+        # Use a deep copy to ensure deques are new instances for each user
+        app_state["users"][user_name] = get_default_user_state()
+    return app_state["users"][user_name]

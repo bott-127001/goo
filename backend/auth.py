@@ -1,11 +1,12 @@
 
 import os
 import requests
+import datetime
 from pathlib import Path
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
-from .state import app_state
+from .state import get_user_state
 
 # Build a path to the .env file relative to this file's location
 # This ensures the backend can find its .env file reliably.
@@ -48,8 +49,7 @@ async def upstox_callback(code: str, state: str, request: Request):
     """
     token_url = "https://api-v2.upstox.com/login/authorization/token"
     headers = {
-        "accept": "application/json",
-        "Content-Type": "application/x-www-form-urlencoded"
+        "accept": "application/json"
     }
 
     # The 'state' parameter identifies the user.
@@ -68,32 +68,31 @@ async def upstox_callback(code: str, state: str, request: Request):
 
     try:
         response = requests.post(token_url, headers=headers, data=data)
-        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        
+        # Check for a non-successful status code from Upstox
+        if response.status_code != 200:
+            error_details = response.json() if response.headers.get('content-type') == 'application/json' else response.text
+            print(f"Error from Upstox API: {response.status_code} - {error_details}")
+            raise HTTPException(status_code=400, detail=f"Failed to obtain access token from Upstox: {error_details}")
 
         token_data = response.json()
         access_token = token_data.get("access_token")
 
         if not access_token:
             raise HTTPException(status_code=400, detail="Access token not found in response from Upstox.")
-
-        app_state["access_token"] = access_token
+        
+        # Get or create the state for this user and store their token
+        user_state = get_user_state(user_name)
+        user_state["access_token"] = access_token
         print(f"Successfully authenticated as {user_name} and access token stored.")
 
-        # Resume the scheduler if it's paused
-        scheduler = app_state.get("scheduler")
-        if scheduler and scheduler.state == 2: # 2 is the state for 'paused'
-            scheduler.resume()
-            print("Scheduler has been resumed.")
+        # Start the background jobs specifically for this user
+        from .main import start_user_scheduler
+        start_user_scheduler(user_name)
 
         # Redirect to the frontend with the access token and user identifier
         frontend_url = f"http://localhost:3000/dashboard?access_token={access_token}&user={user_name}"
         return RedirectResponse(url=frontend_url)
-
-    except requests.exceptions.RequestException as e:
+    except requests.exceptions.RequestException as e: # Catch network-level errors
         print(f"Error exchanging token for {user_name}: {e}")
-        print(f"Response from Upstox: {response.text if 'response' in locals() else 'No response'}")
-
-    raise HTTPException(
-        status_code=400, 
-        detail="Failed to obtain access token for any user. The authorization code may be invalid or expired."
-    )
+        raise HTTPException(status_code=500, detail=f"Network error while communicating with Upstox: {e}")

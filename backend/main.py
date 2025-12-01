@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import requests
-import asyncio
+import asyncio, functools
 import datetime
 from . import auth
 from .state import app_state
@@ -28,17 +28,14 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/auth")
 
-# --- Mount Static Files for Frontend ---
-# This must be after all other routes
-app.mount("/", StaticFiles(directory="frontend/build", html=True), name="static")
-
-def fetch_and_store_data():
+def fetch_and_store_data(user_name: str):
     """
     Fetches option chain data, extracts relevant info, and stores it in buffers.
     """
-    access_token = app_state.get("access_token")
+    user_state = app_state["users"].get(user_name)
+    access_token = user_state.get("access_token") if user_state else None
     if not access_token:
-        print("Data fetch skipped: User not authenticated.")
+        print(f"Data fetch for {user_name} skipped: User not authenticated or state not found.")
         return
 
     # For now, we use a fixed expiry. This will be made dynamic later.
@@ -69,11 +66,11 @@ def fetch_and_store_data():
         return
 
     # Store the full option chain for the UI
-    app_state["option_chain_data"] = data
+    user_state["option_chain_data"] = data
 
     # --- Extract and store data ---
     underlying_price = data[0].get('underlying_spot_price')
-    app_state["price_buffer"].append(underlying_price)
+    user_state["price_buffer"].append(underlying_price)
 
     # Find the ATM strike
     atm_strike = min(data, key=lambda x: abs(x['strike_price'] - underlying_price))
@@ -92,38 +89,44 @@ def fetch_and_store_data():
     if target_strike_index < len(sorted_strikes):
         target_strike_data = sorted_strikes[target_strike_index]
         call_greeks = target_strike_data.get('call_options', {}).get('option_greeks', {})
+        call_market_data = target_strike_data.get('call_options', {}).get('market_data', {})
+        latest_premium = call_market_data.get('ltp')
 
         # Populate the Greek buffers
-        app_state["delta_buffer"].append(call_greeks.get('delta'))
-        app_state["gamma_buffer"].append(call_greeks.get('gamma'))
-        app_state["theta_buffer"].append(call_greeks.get('theta'))
-        app_state["iv_buffer"].append(call_greeks.get('iv'))
+        user_state["delta_buffer"].append(call_greeks.get('delta'))
+        user_state["gamma_buffer"].append(call_greeks.get('gamma'))
+        user_state["theta_buffer"].append(call_greeks.get('theta'))
+        user_state["iv_buffer"].append(call_greeks.get('iv'))
+        # Populate the premium buffer
+        user_state["premium_buffer"].append(latest_premium)
 
-        print(f"Fetched Price: {underlying_price:.2f} | "
+        print(f"[{user_name}] Fetched Price: {underlying_price:.2f} | "
               f"Monitoring Strike: {target_strike_data['strike_price']} | "
               f"Delta: {call_greeks.get('delta')}")
     else:
-        print("Could not find 2nd OTM strike.")
+        print(f"[{user_name}] Could not find 2nd OTM strike.")
 
-def run_greek_confirmation():
+def run_greek_confirmation(user_name: str):
     """
     Runs every 10 seconds to check for Greek confirmation on a pending candidate.
     """
+    user_state = app_state["users"].get(user_name)
+    if not user_state: return
     now = datetime.datetime.now()
-    if app_state.get("cooldown_until") and now < app_state.get("cooldown_until"):
+    if user_state.get("cooldown_until") and now < user_state.get("cooldown_until"):
         # We are in a cooldown period, do nothing with active signals.
         return
 
-    candidate = app_state.get("candidate_setup")
+    candidate = user_state.get("candidate_setup")
     if not candidate:
         return
 
     # --- State 1: Monitor for Entry Confirmation ---
     if candidate.get("status") == "Pending_Greek_Confirmation":
-        # Calculate latest Greek features from buffers
-        delta_slope = calculations.calculate_delta_slope(app_state["delta_buffer"])
-        gamma_change_percent = calculations.calculate_gamma_change_percent(app_state["gamma_buffer"])
-        iv_trend = calculations.calculate_iv_trend(app_state["iv_buffer"])
+        # Calculate latest Greek features from user's buffers
+        delta_slope = calculations.calculate_delta_slope(user_state["delta_buffer"])
+        gamma_change_percent = calculations.calculate_gamma_change_percent(user_state["gamma_buffer"])
+        iv_trend = calculations.calculate_iv_trend(user_state["iv_buffer"])
 
         settings = database.get_settings()
         # Run the confirmation logic
@@ -146,33 +149,36 @@ def run_greek_confirmation():
             # Update the database log with the final details
             db_updates = {"status": "ENTRY_APPROVED", "entry_price": entry_price, "result": f"SL: {sl_price:.2f}, TGT: {target_price:.2f}"}
             database.update_log_entry(confirmed_candidate.get("log_id"), db_updates)
-            app_state["candidate_setup"] = confirmed_candidate
+            user_state["candidate_setup"] = confirmed_candidate
         return
 
     # --- State 2: Monitor Active Trade for Exit ---
     if candidate.get("status") == "ENTRY_APPROVED":
-        latest_premium = app_state["premium_buffer"][-1] if app_state["premium_buffer"] else 0
+        latest_premium = user_state["premium_buffer"][-1] if user_state["premium_buffer"] else 0
         exit_reason = logic.check_exit_conditions(candidate, latest_premium)
 
         if exit_reason:
-            print(f"!!! EXIT CONDITION MET: {exit_reason} !!!")
+            print(f"!!! [{user_name}] EXIT CONDITION MET: {exit_reason} !!!")
             # Update the log with the exit reason
             db_updates = {"status": "CLOSED", "result": exit_reason}
             database.update_log_entry(candidate.get("log_id"), db_updates)
 
             # Clear the active signal and enter cooldown
-            app_state["candidate_setup"] = None
+            user_state["candidate_setup"] = None
             settings = database.get_settings()
             cooldown_minutes = int(settings.get('cooldown_minutes', 15))
-            app_state["cooldown_until"] = now + datetime.timedelta(minutes=cooldown_minutes)
-            print(f"Trade closed. Entering cooldown until {app_state['cooldown_until']}")
+            user_state["cooldown_until"] = now + datetime.timedelta(minutes=cooldown_minutes)
+            print(f"[{user_name}] Trade closed. Entering cooldown until {user_state['cooldown_until']}")
 
 
-def process_5min_candle():
+def process_5min_candle(user_name: str):
     """
     Forms a 5-minute candle from the price_buffer and stores it.
     """
-    price_buffer = app_state["price_buffer"]
+    user_state = app_state["users"].get(user_name)
+    if not user_state: return
+
+    price_buffer = user_state["price_buffer"]
     if len(price_buffer) < 30:
         print("Not enough data for 5-min candle, skipping.")
         return
@@ -190,22 +196,26 @@ def process_5min_candle():
     timestamp = now.replace(minute=now.minute - (now.minute % 5), second=0, microsecond=0)
     
     new_candle = [timestamp.isoformat(), candle_open, candle_high, candle_low, candle_close]
-    app_state["candles_5min_buffer"].append(new_candle)
-    print(f"New 5-min Candle created: {new_candle}")
+    user_state["candles_5min_buffer"].append(new_candle)
+    print(f"[{user_name}] New 5-min Candle created: {new_candle}")
 
-def run_logic_controller():
+def run_logic_controller(user_name: str):
     """
     Runs every 5 minutes to determine Bias and Market Type.
     """
-    if app_state.get("cooldown_until") and datetime.datetime.now() < app_state.get("cooldown_until"):
-        print("Logic controller skipped due to cooldown.")
+    user_state = app_state["users"].get(user_name)
+    if not user_state: return
+
+    if user_state.get("cooldown_until") and datetime.datetime.now() < user_state.get("cooldown_until"):
+        print(f"[{user_name}] Logic controller skipped due to cooldown.")
         # Reset bias/market type during cooldown to avoid new signals
-        app_state["bias"], app_state["market_type"] = "Neutral", "Undetermined"
+        user_state["bias"], user_state["market_type"] = "Neutral", "Undetermined"
         return
     # 1. Get all calculated features
-    signals = get_signals()
-    latest_price = app_state["price_buffer"][-1] if app_state["price_buffer"] else 0
-    latest_premium = app_state["premium_buffer"][-1] if app_state["premium_buffer"] else 0
+    # TODO: This needs to be user-specific as well
+    signals = get_signals(user_name)
+    latest_price = user_state["price_buffer"][-1] if user_state["price_buffer"] else 0
+    latest_premium = user_state["premium_buffer"][-1] if user_state["premium_buffer"] else 0
 
     # 2. Determine Bias
     bias = logic.determine_bias(
@@ -216,7 +226,7 @@ def run_logic_controller():
         gamma_change=signals["gamma_change_percent"],
         iv_trend=signals["iv_trend"]
     )
-    app_state["bias"] = bias
+    user_state["bias"] = bias
 
     # 3. Determine Market Type
     settings = database.get_settings()
@@ -228,7 +238,7 @@ def run_logic_controller():
         iv_trend=signals["iv_trend"],
         settings=settings
     )
-    app_state["market_type"] = market_type
+    user_state["market_type"] = market_type
 
     # 4. Detect Entry Setup
     candidate = logic.detect_entry_setup(
@@ -239,14 +249,14 @@ def run_logic_controller():
         body_ratio=signals["latest_candle_body_ratio"],
         signal_premium=latest_premium
     )
-    app_state["candidate_setup"] = candidate
+    user_state["candidate_setup"] = candidate
     if candidate and candidate.get("status") == "Pending_Greek_Confirmation":
         # Log the initial detection of a candidate signal
         log_id = database.log_signal(candidate)
         if log_id:
             candidate["log_id"] = log_id
-            app_state["candidate_setup"] = candidate
-    print(f"Logic Controller Update: Bias={bias}, MarketType={market_type}, Candidate={candidate}")
+            user_state["candidate_setup"] = candidate
+    print(f"[{user_name}] Logic Controller Update: Bias={bias}, MarketType={market_type}, Candidate={candidate}")
 
 @app.get("/")
 def read_root():
@@ -257,7 +267,9 @@ def get_user_profile():
     """
     Fetches the user's profile from Upstox to test the access token.
     """
-    access_token = app_state.get("access_token")
+    # This is a generic endpoint, let's just use the first available token for a quick test
+    first_user = next(iter(app_state["users"].values()), None)
+    access_token = first_user.get("access_token") if first_user else None
     if not access_token:
         return {"error": "User not authenticated. Please login first via /auth/login"}
 
@@ -269,20 +281,33 @@ def get_user_profile():
     response = requests.get(url, headers=headers)
     return response.json()
 
+def start_user_scheduler(user_name: str):
+    """
+    Starts a set of background jobs for a specific user.
+    """
+    user_state = app_state["users"].get(user_name)
+    if not user_state or user_state.get("scheduler"):
+        print(f"Scheduler for {user_name} already running or user state not found.")
+        return
+
+    scheduler = BackgroundScheduler()
+    # Use functools.partial to pass the user_name to the job functions
+    scheduler.add_job(functools.partial(fetch_and_store_data, user_name), 'interval', seconds=10, id=f'data_fetch_{user_name}')
+    scheduler.add_job(functools.partial(run_greek_confirmation, user_name), 'interval', seconds=10, start_date=datetime.datetime.now() + datetime.timedelta(seconds=10), id=f'greek_confirm_{user_name}')
+    scheduler.add_job(functools.partial(process_5min_candle, user_name), 'cron', minute='*/5', second='5', id=f'candle_{user_name}')
+    scheduler.add_job(functools.partial(run_logic_controller, user_name), 'cron', minute='*/5', second='10', id=f'logic_{user_name}')
+    scheduler.start()
+    user_state["scheduler"] = scheduler
+    print(f"Background scheduler started for user: {user_name}")
+
 @app.on_event("startup")
 def startup_event():
     """
     Initializes and starts the background scheduler on application startup.
     """
     database.init_db() # Initialize the database
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(fetch_and_store_data, 'interval', seconds=10, id='data_fetch_job')
-    scheduler.add_job(run_greek_confirmation, 'interval', seconds=10, start_date=datetime.datetime.now() + datetime.timedelta(seconds=10), id='greek_confirm_job')
-    scheduler.add_job(process_5min_candle, 'cron', minute='*/5', second='5', id='candle_job') # Creates candle
-    scheduler.add_job(run_logic_controller, 'cron', minute='*/5', second='10', id='logic_job') # Runs logic after candle
-    scheduler.start(paused=True)
-    app_state["scheduler"] = scheduler
-    print("Background scheduler initialized in a paused state.")
+    # We no longer start a global scheduler on startup.
+    print("Database initialized. Schedulers will start upon user login.")
 
 @app.get("/latest-data")
 def get_latest_data():
@@ -290,33 +315,39 @@ def get_latest_data():
     An endpoint to inspect the current content of our data buffers.
     """
     return {
-        "prices": list(app_state["price_buffer"]),
-        "deltas": list(app_state["delta_buffer"]),
-        "gammas": list(app_state["gamma_buffer"]),
-        "thetas": list(app_state["theta_buffer"]),
-        "ivs": list(app_state["iv_buffer"]),
-        "candles_5min": list(app_state["candles_5min_buffer"]),
+        "users": {
+            user: {
+                "prices": list(state["price_buffer"]),
+                "deltas": list(state["delta_buffer"]),
+                "gammas": list(state["gamma_buffer"]),
+            } for user, state in app_state["users"].items()
+        }
     }
 
 @app.get("/signals")
-def get_signals():
+def get_signals(user_name: str = None):
     """
     An endpoint to calculate and display the current signals from the data.
     """
-    # --- TEMPORARY DEBUGGING ---
-    print(f"DEBUG: /signals called. Current delta_buffer: {list(app_state['delta_buffer'])}")
+    # If no user is specified, try to get the first one.
+    if not user_name:
+        user_name = next(iter(app_state["users"]), None)
+    
+    user_state = app_state["users"].get(user_name)
+    if not user_state:
+        return {"error": f"No data for user: {user_name}"}
 
-    delta_slope = calculations.calculate_delta_slope(app_state["delta_buffer"])
-    gamma_change_percent = calculations.calculate_gamma_change_percent(app_state["gamma_buffer"])
-    iv_trend = calculations.calculate_iv_trend(app_state["iv_buffer"])
-    delta_stability = calculations.calculate_delta_stability(app_state["delta_buffer"])
-    theta_change_percent = calculations.calculate_theta_change_percent(app_state["theta_buffer"])
+    delta_slope = calculations.calculate_delta_slope(user_state["delta_buffer"])
+    gamma_change_percent = calculations.calculate_gamma_change_percent(user_state["gamma_buffer"])
+    iv_trend = calculations.calculate_iv_trend(user_state["iv_buffer"])
+    delta_stability = calculations.calculate_delta_stability(user_state["delta_buffer"])
+    theta_change_percent = calculations.calculate_theta_change_percent(user_state["theta_buffer"])
     
-    ema_20 = calculations.calculate_ema(app_state["candles_5min_buffer"])
-    atr_14 = calculations.calculate_atr(app_state["candles_5min_buffer"])
+    ema_20 = calculations.calculate_ema(user_state["candles_5min_buffer"])
+    atr_14 = calculations.calculate_atr(user_state["candles_5min_buffer"])
     
-    swing_points = calculations.find_swing_points(app_state["candles_5min_buffer"])
-    body_ratio = calculations.calculate_body_ratio(app_state["candles_5min_buffer"])
+    swing_points = calculations.find_swing_points(user_state["candles_5min_buffer"])
+    body_ratio = calculations.calculate_body_ratio(user_state["candles_5min_buffer"])
 
     return {
         "delta_slope": delta_slope,
@@ -335,11 +366,12 @@ def get_system_status():
     """
     Returns the current system status (Bias and Market Type).
     """
-    return {
-        "bias": app_state.get("bias"),
-        "market_type": app_state.get("market_type"),
-        "candidate_setup": app_state.get("candidate_setup"),
-    }
+    # Return status for all active users
+    return {user: {
+        "bias": state.get("bias"),
+        "market_type": state.get("market_type"),
+        "candidate_setup": state.get("candidate_setup"),
+    } for user, state in app_state["users"].items()}
 
 @app.get("/tradelogs")
 def get_trade_logs():
@@ -348,13 +380,16 @@ def get_trade_logs():
     """
     return database.get_all_logs()
 
-@app.get("/option-chain")
-def get_option_chain():
+@app.get("/option-chain/{user_name}")
+def get_option_chain(user_name: str):
     """
     Returns the latest full option chain data.
     """
+    user_state = app_state["users"].get(user_name)
+    if not user_state:
+        return []
     # Return a copy to avoid potential mutation issues
-    return list(app_state.get("option_chain_data", []))
+    return list(user_state.get("option_chain_data", []))
 
 @app.get("/settings")
 def read_settings():
@@ -372,20 +407,27 @@ def write_settings(settings_update: SettingsUpdate):
     database.update_setting(settings_update.key, settings_update.value)
     return {"status": "success", "key": settings_update.key, "value": settings_update.value}
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+@app.websocket("/ws/{user_name}")
+async def websocket_endpoint(websocket: WebSocket, user_name: str):
     """
     WebSocket endpoint to stream live data and system status to the frontend.
     """
     await websocket.accept()
+    print(f"WebSocket connection established for user: {user_name}")
     try:
         while True:
-            # Gather the latest data from the application state
-            nifty_price = app_state["price_buffer"][-1] if app_state["price_buffer"] else "Fetching..."
-            delta = app_state["delta_buffer"][-1] if app_state["delta_buffer"] else "--"
-            gamma = app_state["gamma_buffer"][-1] if app_state["gamma_buffer"] else "--"
-            theta = app_state["theta_buffer"][-1] if app_state["theta_buffer"] else "--"
-            iv = app_state["iv_buffer"][-1] if app_state["iv_buffer"] else "--"
+            user_state = app_state["users"].get(user_name)
+            if not user_state:
+                # If user logs out or state is cleared, send an empty payload and wait
+                await websocket.send_json({})
+                await asyncio.sleep(2)
+                continue
+
+            nifty_price = user_state["price_buffer"][-1] if user_state["price_buffer"] else "Fetching..."
+            delta = user_state["delta_buffer"][-1] if user_state["delta_buffer"] else "--"
+            gamma = user_state["gamma_buffer"][-1] if user_state["gamma_buffer"] else "--"
+            theta = user_state["theta_buffer"][-1] if user_state["theta_buffer"] else "--"
+            iv = user_state["iv_buffer"][-1] if user_state["iv_buffer"] else "--"
 
             payload = {
                 "nifty_price": f"{nifty_price:.2f}" if isinstance(nifty_price, float) else nifty_price,
@@ -393,13 +435,18 @@ async def websocket_endpoint(websocket: WebSocket):
                 "gamma": f"{gamma:.4f}" if isinstance(gamma, float) else gamma,
                 "theta": f"{theta:.4f}" if isinstance(theta, float) else theta,
                 "iv": f"{iv:.4f}" if isinstance(iv, float) else iv,
-                "bias": app_state.get("bias", "Neutral"),
-                "market_type": app_state.get("market_type", "Undetermined"),
-                "candidate_setup": app_state.get("candidate_setup"),
+                "bias": user_state.get("bias", "Neutral"),
+                "market_type": user_state.get("market_type", "Undetermined"),
+                "candidate_setup": user_state.get("candidate_setup"),
             }
+            
             await websocket.send_json(payload)
             await asyncio.sleep(2)  # Send updates every 2 seconds
     except Exception as e:
         print(f"WebSocket Error: {e}")
     finally:
         print("Client disconnected from WebSocket.")
+
+# --- Mount Static Files for Frontend ---
+# This must be the very last thing, after all other routes are defined.
+app.mount("/", StaticFiles(directory="frontend/build", html=True), name="static")

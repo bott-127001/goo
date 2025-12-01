@@ -9,9 +9,9 @@ const Login = () => {
     let clientId;
 
     if (user === 'samarth') {
-      clientId = process.env.REACT_APP_SAMARTH_UPSTOX_CLIENT_ID;
+      clientId = samarthClientId;
     } else if (user === 'prajwal') {
-      clientId = process.env.REACT_APP_PRAJWAL_UPSTOX_CLIENT_ID;
+      clientId = prajwalClientId;
     }
 
     if (!clientId || !redirectUri) {
@@ -19,7 +19,7 @@ const Login = () => {
       return;
     }
 
-    const authUrl = `https://api.upstox.com/v2/login/authorization/dialog?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code`;
+    const authUrl = `https://api-v2.upstox.com/login/authorization/dialog?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&state=${user}`;
     window.location.href = authUrl;
   };
 
@@ -27,7 +27,7 @@ const Login = () => {
     <div className="login-container">
       <h1>Greeks-Based Trading Tool</h1>
       <p>Authenticate securely using your Upstox account to access your trading dashboard.</p>
-      <button onClick={() => handleLogin('samarth')} style={{ marginRight: '10px' }}>
+      <button onClick={() => handleLogin('samarth')} style={{ marginRight: '10px' }} disabled={!samarthClientId}>
         Login as Samarth
       </button>
       <button onClick={() => handleLogin('prajwal')} disabled={!prajwalClientId}>

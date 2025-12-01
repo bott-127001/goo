@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import './Settings.css';
 
 const Settings = () => {
@@ -16,11 +16,12 @@ const Settings = () => {
     atr_trendy_max: ''
   });
   const [message, setMessage] = useState('');
+  const location = useLocation();
 
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const response = await fetch('/settings');
+        const response = await fetch('http://localhost:8000/settings');
         const data = await response.json();
         setSettings(data);
       } catch (error) {
@@ -37,7 +38,7 @@ const Settings = () => {
 
   const handleSave = async (key) => {
     try {
-      const response = await fetch('/settings', {
+      const response = await fetch('http://localhost:8000/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, value: settings[key] }),
@@ -60,11 +61,11 @@ const Settings = () => {
       <header className="settings-header">
         <h1>Strategy Settings</h1>
         <nav className="dashboard-nav">
-          <Link to="/dashboard">Dashboard</Link>
-          <Link to="/signals">Signals</Link>
-          <Link to="/logs">Logs</Link>
-          <Link to="/settings">Settings</Link>
-          <Link to="/option-chain">Option Chain</Link>
+          <Link to={`/dashboard${location.search}`}>Dashboard</Link>
+          <Link to={`/signals${location.search}`}>Signals</Link>
+          <Link to={`/logs${location.search}`}>Logs</Link>
+          <Link to={`/settings${location.search}`}>Settings</Link>
+          <Link to={`/option-chain${location.search}`}>Option Chain</Link>
         </nav>
       </header>
 
