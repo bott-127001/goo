@@ -25,9 +25,11 @@ const Dashboard = () => {
       return;
     }
 
+    const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+    const wsBaseUrl = apiBaseUrl.replace(/^http/, 'ws');
+
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws';
-    const wsHost = window.location.hostname; // Use hostname for reliability
-    const wsURL = `${wsProtocol}://${wsHost}:8000/ws/${userName}`;
+    const wsURL = `${wsBaseUrl}/ws/${userName}`;
 
     const ws = new WebSocket(wsURL);
 
@@ -46,7 +48,7 @@ const Dashboard = () => {
         // Logic to show the final result of a closed trade for a few seconds
         if (!data.candidate_setup && previousSignalRef.current?.status === 'ENTRY_APPROVED') {
           // A trade was just closed. Fetch the final result.
-          fetch('http://localhost:8000/tradelogs')
+          fetch(`${apiBaseUrl}/tradelogs`)
             .then(res => res.json())
             .then(logs => {
               const lastLog = logs.find(log => log.id === previousSignalRef.current.log_id);

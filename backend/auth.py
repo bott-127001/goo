@@ -25,6 +25,7 @@ samarth_client_secret = os.getenv("SAMARTH_UPSTOX_CLIENT_SECRET")
 prajwal_client_id = os.getenv("PRAJWAL_UPSTOX_CLIENT_ID")
 prajwal_client_secret = os.getenv("PRAJWAL_UPSTOX_CLIENT_SECRET")
 redirect_uri = os.getenv("UPSTOX_REDIRECT_URI")
+frontend_base_url = os.getenv("FRONTEND_URL", "http://localhost:3000") # Default for local dev
 
 user_credentials = {} # Keyed by user name ('samarth', 'prajwal')
 
@@ -89,7 +90,7 @@ async def upstox_callback(code: str, state: str, request: Request):
         start_user_scheduler(user_name)
 
         # Redirect to the frontend with the access token and user identifier
-        frontend_url = f"http://localhost:3000/dashboard?access_token={access_token}&user={user_name}"
+        frontend_url = f"{frontend_base_url}/dashboard?access_token={access_token}&user={user_name}"
         return RedirectResponse(url=frontend_url)
     except requests.exceptions.RequestException as e: # Catch network-level errors
         print(f"Error exchanging token for {user_name}: {e}")

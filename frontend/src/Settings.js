@@ -18,10 +18,11 @@ const Settings = () => {
   const [message, setMessage] = useState('');
   const location = useLocation();
 
+  const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const response = await fetch('http://localhost:8000/settings');
+        const response = await fetch(`${apiBaseUrl}/settings`);
         const data = await response.json();
         setSettings(data);
       } catch (error) {
@@ -29,7 +30,7 @@ const Settings = () => {
       }
     };
     fetchSettings();
-  }, []);
+  }, [apiBaseUrl]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -38,7 +39,7 @@ const Settings = () => {
 
   const handleSave = async (key) => {
     try {
-      const response = await fetch('http://localhost:8000/settings', {
+      const response = await fetch(`${apiBaseUrl}/settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, value: settings[key] }),

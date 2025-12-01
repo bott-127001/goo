@@ -16,11 +16,12 @@ const OptionChain = () => {
       return;
     }
 
+    const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
     const fetchData = async () => {
       try {
         const [chainRes, statusRes] = await Promise.all([
-          fetch(`http://localhost:8000/option-chain/${userName}`),
-          fetch('http://localhost:8000/status'),
+          fetch(`${apiBaseUrl}/option-chain/${userName}`),
+          fetch(`${apiBaseUrl}/status`),
         ]);
         const chainData = await chainRes.json();
         const statusData = await statusRes.json();

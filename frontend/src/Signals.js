@@ -16,11 +16,12 @@ const Signals = () => {
       return;
     }
 
+    const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
     const fetchData = async () => {
       try {
         const [statusRes, signalsRes] = await Promise.all([
-          fetch('http://localhost:8000/status'),
-          fetch(`http://localhost:8000/signals?user_name=${userName}`),
+          fetch(`${apiBaseUrl}/status`),
+          fetch(`${apiBaseUrl}/signals?user_name=${userName}`),
         ]);
         const statusData = await statusRes.json();
         const signalsData = await signalsRes.json();
