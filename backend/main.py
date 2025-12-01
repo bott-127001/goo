@@ -28,6 +28,10 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/auth")
 
+api_router = APIRouter(prefix="/api")
+
+
+@api_router.get("/profile")
 def fetch_and_store_data(user_name: str):
     """
     Fetches option chain data, extracts relevant info, and stores it in buffers.
@@ -258,7 +262,6 @@ def run_logic_controller(user_name: str):
             user_state["candidate_setup"] = candidate
     print(f"[{user_name}] Logic Controller Update: Bias={bias}, MarketType={market_type}, Candidate={candidate}")
 
-@app.get("/profile")
 def get_user_profile():
     """
     Fetches the user's profile from Upstox to test the access token.
@@ -305,7 +308,7 @@ def startup_event():
     # We no longer start a global scheduler on startup.
     print("Database initialized. Schedulers will start upon user login.")
 
-@app.get("/latest-data")
+@api_router.get("/latest-data")
 def get_latest_data():
     """
     An endpoint to inspect the current content of our data buffers.
@@ -320,7 +323,7 @@ def get_latest_data():
         }
     }
 
-@app.get("/signals")
+@api_router.get("/signals")
 def get_signals(user_name: str = None):
     """
     An endpoint to calculate and display the current signals from the data.
@@ -357,7 +360,7 @@ def get_signals(user_name: str = None):
         "latest_candle_body_ratio": body_ratio,
     }
 
-@app.get("/status")
+@api_router.get("/status")
 def get_system_status():
     """
     Returns the current system status (Bias and Market Type).
@@ -369,14 +372,14 @@ def get_system_status():
         "candidate_setup": state.get("candidate_setup"),
     } for user, state in app_state["users"].items()}
 
-@app.get("/tradelogs")
+@api_router.get("/tradelogs")
 def get_trade_logs():
     """
     Returns all historical trade logs from the database.
     """
     return database.get_all_logs()
 
-@app.get("/option-chain/{user_name}")
+@api_router.get("/option-chain/{user_name}")
 def get_option_chain(user_name: str):
     """
     Returns the latest full option chain data.
@@ -387,7 +390,7 @@ def get_option_chain(user_name: str):
     # Return a copy to avoid potential mutation issues
     return list(user_state.get("option_chain_data", []))
 
-@app.get("/settings")
+@api_router.get("/settings")
 def read_settings():
     """
     Returns the current strategy settings from the database.
@@ -398,12 +401,12 @@ class SettingsUpdate(BaseModel):
     key: str
     value: str
 
-@app.post("/settings")
+@api_router.post("/settings")
 def write_settings(settings_update: SettingsUpdate):
     database.update_setting(settings_update.key, settings_update.value)
     return {"status": "success", "key": settings_update.key, "value": settings_update.value}
 
-@app.websocket("/ws/{user_name}")
+@api_router.websocket("/ws/{user_name}")
 async def websocket_endpoint(websocket: WebSocket, user_name: str):
     """
     WebSocket endpoint to stream live data and system status to the frontend.
@@ -442,6 +445,8 @@ async def websocket_endpoint(websocket: WebSocket, user_name: str):
         print(f"WebSocket Error: {e}")
     finally:
         print("Client disconnected from WebSocket.")
+
+app.include_router(api_router)
 
 # --- Mount Static Files for Frontend ---
 # This must be the very last thing, after all other routes are defined.
