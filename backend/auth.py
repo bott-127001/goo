@@ -11,9 +11,7 @@ from .state import get_user_state
 # Build a path to the .env file relative to this file's location
 # This ensures the backend can find its .env file reliably.
 env_path = Path(__file__).resolve().parent / '.env'
-if not env_path.exists():
-    raise FileNotFoundError(f".env file not found at {env_path}. Please create it.")
-load_dotenv(dotenv_path=env_path) # Load the .env file
+load_dotenv(dotenv_path=env_path) # Load the .env file, but don't fail if it's not there.
 
 router = APIRouter(
     # No prefix here, as the callback URL from Upstox doesn't have it.
