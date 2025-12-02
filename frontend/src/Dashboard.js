@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './Dashboard.css';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import SystemStatus from './SystemStatus';
 import LiveMarketOverview from './LiveMarketOverview'; // Assuming this is a component, not a page
 import GreeksMonitor from './GreeksMonitor';
@@ -15,7 +15,6 @@ const Dashboard = () => {
   const [error, setError] = useState(null);
   const previousSignalRef = useRef();
   const location = useLocation();
-  const navigate = useNavigate();
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);

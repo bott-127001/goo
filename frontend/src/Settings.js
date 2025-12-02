@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
 import './Settings.css';
 
 const Settings = () => {
@@ -29,7 +28,6 @@ const Settings = () => {
     eod_exit_minutes: ''
   });
   const [message, setMessage] = useState('');
-  const location = useLocation();
 
   const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || window.location.origin;
   useEffect(() => {

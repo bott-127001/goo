@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
 import './TradeLogs.css';
 
 const TradeLogs = () => {
   const [logs, setLogs] = useState([]);
-  const location = useLocation();
 
   useEffect(() => {
     const fetchLogs = async () => {
