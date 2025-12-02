@@ -37,6 +37,15 @@ def fetch_and_store_data(user_name: str):
     """
     Fetches option chain data, extracts relevant info, and stores it in buffers.
     """
+    # --- ADD THIS CHECK ---
+    # Only run during market hours (e.g., Mon-Fri, 9:15 AM to 3:30 PM IST)
+    # Note: Render servers are in UTC. IST is UTC+5:30.
+    # 9:15 AM IST = 3:45 AM UTC. 3:30 PM IST = 10:00 AM UTC.
+    now_utc = datetime.datetime.utcnow()
+    if not (0 <= now_utc.weekday() <= 4 and datetime.time(3, 45) <= now_utc.time() <= datetime.time(10, 0)):
+        # Silently skip if market is closed
+        return
+    # --- END OF CHECK ---
     user_state = app_state["users"].get(user_name)
     access_token = user_state.get("access_token") if user_state else None
     if not access_token:
@@ -115,6 +124,15 @@ def run_greek_confirmation(user_name: str):
     """
     Runs every 10 seconds to check for Greek confirmation on a pending candidate.
     """
+    # --- ADD THIS CHECK ---
+    # Only run during market hours
+    now_utc = datetime.datetime.utcnow()
+    if not (0 <= now_utc.weekday() <= 4 and datetime.time(3, 45) <= now_utc.time() <= datetime.time(10, 0)):
+        # If a candidate exists outside hours, clear it to be safe.
+        if app_state["users"].get(user_name, {}).get("candidate_setup"):
+            app_state["users"][user_name]["candidate_setup"] = None
+        return
+    # --- END OF CHECK ---
     user_state = app_state["users"].get(user_name)
     if not user_state: return
     now = datetime.datetime.now()
@@ -180,6 +198,12 @@ def process_5min_candle(user_name: str):
     """
     Forms a 5-minute candle from the price_buffer and stores it.
     """
+    # --- ADD THIS CHECK ---
+    # Only run during market hours
+    now_utc = datetime.datetime.utcnow()
+    if not (0 <= now_utc.weekday() <= 4 and datetime.time(3, 45) <= now_utc.time() <= datetime.time(10, 0)):
+        return
+    # --- END OF CHECK ---
     user_state = app_state["users"].get(user_name)
     if not user_state: return
 
@@ -208,6 +232,12 @@ def run_logic_controller(user_name: str):
     """
     Runs every 5 minutes to determine Bias and Market Type.
     """
+    # --- ADD THIS CHECK ---
+    # Only run during market hours
+    now_utc = datetime.datetime.utcnow()
+    if not (0 <= now_utc.weekday() <= 4 and datetime.time(3, 45) <= now_utc.time() <= datetime.time(10, 0)):
+        return
+    # --- END OF CHECK ---
     user_state = app_state["users"].get(user_name)
     if not user_state: return
 
