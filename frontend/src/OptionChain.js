@@ -58,17 +58,6 @@ const OptionChain = () => {
 
   return (
     <div className="option-chain-page">
-      <header className="option-chain-header">
-        <h1>Live Option Chain</h1>
-        <nav className="dashboard-nav">
-          <Link to={`/dashboard${location.search}`}>Dashboard</Link>
-          <Link to={`/signals${location.search}`}>Signals</Link>
-          <Link to={`/logs${location.search}`}>Logs</Link>
-          <Link to={`/settings${location.search}`}>Settings</Link>
-          <Link to={`/option-chain${location.search}`}>Option Chain</Link>
-        </nav>
-      </header>
-
       <div className="option-chain-table-container">
         <table>
           <thead>

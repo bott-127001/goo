@@ -1,0 +1,176 @@
+Overall Goal
+Fully implement the "Continuation" and "Reversal" entry strategies, the advanced Greek-based and time-based exit logic, and refine the frontend infrastructure for reliability, all while ensuring new thresholds are configurable.
+
+Phase 1: Frontend Infrastructure & Reliability
+Objective: Centralize the navigation and the keep-alive ping into a single shared component. This ensures the keep-alive ping runs consistently across all authenticated pages and simplifies future UI changes.
+
+Task 1.1: Create a Shared Layout Component
+
+Affected Files:
+
+e:\project\start-main\frontend\src\App.js
+e:\project\start-main\frontend\src\Layout.js (NEW FILE)
+e:\project\start-main\frontend\src\Layout.css (NEW FILE)
+e:\project\start-main\frontend\src\Dashboard.js
+e:\project\start-main\frontend\src\Signals.js
+e:\project\start-main\frontend\src\TradeLogs.js
+e:\project\start-main\frontend\src\OptionChain.js
+e:\project\start-main\frontend\src\Settings.js
+e:\project\start-main\frontend\src\Dashboard.css (remove nav styles)
+e:\project\start-main\frontend\src\OptionChain.css (remove nav styles)
+e:\project\start-main\frontend\src\TradeLogs.css (remove nav styles)
+Detailed Steps:
+
+Create Layout.js: This component will contain the header, navigation links, logout button, and the keep-alive useEffect hook. It will accept children as a prop to render the specific page content.
+Create Layout.css: Move all shared navigation and header styles from Dashboard.css, OptionChain.css, and TradeLogs.css into this new file.
+Update App.js: Modify the routing to wrap all authenticated routes (/dashboard, /signals, etc.) with the new Layout component.
+Refactor Page Components: Remove the header and nav elements, the handleLogout function, and the keep-alive useEffect from Dashboard.js, Signals.js, TradeLogs.js, OptionChain.js, and Settings.js. Each page component will now only render its specific content.
+Clean up CSS: Remove the redundant navigation styles from Dashboard.css, OptionChain.css, and TradeLogs.css.
+Verification:
+
+Navigate between all pages to ensure the header and navigation are consistent.
+Check the browser console for the keep-alive ping messages every 5 minutes, confirming it runs regardless of the active page.
+Verify the logout functionality still works.
+Phase 2: Implementing Entry Strategies
+Objective: Expand the detect_entry_setup function to include the "Continuation" and "Reversal" strategies, making the system capable of identifying trades in "Trendy" and "Volatile" markets as per your plan.
+
+Task 2.1: Implement "Continuation" Entry Strategy
+
+Objective: Add logic to identify continuation patterns in "Trendy" markets.
+
+Affected Files:
+
+e:\project\start-main\backend\logic.py
+e:\project\start-main\backend\calculations.py (potentially, if new calculations are needed for retest)
+e:\project\start-main\backend\database.py (for new settings)
+e:\project\start-main\frontend\src\Settings.js (for new settings)
+Detailed Steps:
+
+Modify detect_entry_setup (logic.py):
+Remove the market_type != "Volatile" check from the initial guard clause.
+Add a new if market_type == "Trendy": block.
+Inside this block, implement the price rules for Continuation:
+Retest: This will require identifying the last "breakout candle" (which isn't explicitly stored yet) and calculating the pullback percentage. We might need to store more context about previous candles or breakouts.
+Candle respects structure (HL/HH): Use swing_points and latest_price.
+No close below structure: Requires checking latest_price against relevant swing points.
+If price conditions are met, return a candidate_setup with status: "Pending_Greek_Confirmation" and type: "Continuation_Bullish" or Continuation_Bearish.
+Update confirm_with_greeks (logic.py):
+Add a new if "Continuation" in candidate["type"]: block.
+Implement the Greek confirmation rules for Continuation: DeltaSlope, GammaChange, IVTrend, ThetaChange.
+Define the condition for approval (e.g., "at least 2 Greek conditions hold").
+Add Settings: Introduce new settings for Continuation thresholds (e.g., cont_retest_min_pct, cont_retest_max_pct, cont_delta_thresh, cont_gamma_thresh, cont_iv_thresh, cont_theta_thresh) in database.py and add input fields for them in Settings.js.
+Verification:
+
+Simulate data or run live, ensuring that when the market is "Trendy" and price conditions for Continuation are met, a candidate_setup is generated.
+Verify that Greek confirmation correctly transitions the candidate to "ENTRY_APPROVED".
+Task 2.2: Implement "Reversal" Entry Strategy
+
+Objective: Add logic to identify reversal patterns in "Volatile" markets.
+
+Affected Files:
+
+e:\project\start-main\backend\logic.py
+e:\project\start-main\backend\calculations.py (potentially, for reversal candle detection)
+e:\project\start-main\backend\database.py (for new settings)
+e:\project\start-main\frontend\src\Settings.js (for new settings)
+Detailed Steps:
+
+Modify detect_entry_setup (logic.py):
+Add a new if market_type == "Volatile": block (or extend the existing one).
+Implement price rules for Reversal:
+Price hits liquidity zone: This will require storing and checking against previous swing highs/lows or other key levels.
+Strong reversal candle: This might require a new function in calculations.py to identify specific candle patterns (e.g., pin bar, engulfing).
+Reversal from over-extended move: This requires tracking recent price movement (e.g., latest_price vs. price_buffer history).
+If price conditions are met, return a candidate_setup with status: "Pending_Greek_Confirmation" and type: "Reversal_Bullish" or Reversal_Bearish.
+Update confirm_with_greeks (logic.py):
+Add a new if "Reversal" in candidate["type"]: block.
+Implement the Greek confirmation rules for Reversal: DeltaSlope flips, Gamma goes from +/- or drops, IV dropping.
+Define the condition for approval (e.g., "2 price + 2 Greek conditions hold").
+Add Settings: Introduce new settings for Reversal thresholds (e.g., rev_delta_flip_thresh, rev_gamma_drop_thresh, rev_iv_drop_thresh) in database.py and add input fields for them in Settings.js.
+Verification:
+
+Simulate data or run live, ensuring that when the market is "Volatile" and price conditions for Reversal are met, a candidate_setup is generated.
+Verify that Greek confirmation correctly transitions the candidate to "ENTRY_APPROVED".
+Phase 3: Advanced Exit Logic
+Objective: Enhance the trade management by adding Greek-based and time-based stop-loss mechanisms.
+
+Task 3.1: Implement Greek-Based Stop Loss
+
+Objective: Exit a trade if Greek conditions indicate a loss of momentum or a reversal against the trade.
+
+Affected Files:
+
+e:\project\start-main\backend\logic.py (check_exit_conditions)
+e:\project\start-main\backend\main.py (run_greek_confirmation calls check_exit_conditions)
+e:\project\start-main\backend\database.py (for new settings)
+e:\project\start-main\frontend\src\Settings.js (for new settings)
+Detailed Steps:
+
+Modify check_exit_conditions (logic.py):
+This function will need access to the current Greek values (DeltaSlope, GammaChange, IVTrend). These should be passed as arguments from run_greek_confirmation.
+Implement the Greek-based exit rules:
+Delta Reversal: DeltaSlope flips by 0.02 opposite.
+Gamma Drop: GammaChange < -5%.
+IV Crush: IVTrend < -1.5%.
+If any of these conditions are met, return an appropriate exit reason string (e.g., "Greek Exit: Delta Reversal").
+Update run_greek_confirmation (main.py):
+When calling logic.check_exit_conditions, pass the currently calculated delta_slope, gamma_change_percent, and iv_trend to it.
+Add Settings: Introduce new settings for Greek exit thresholds (e.g., exit_delta_flip_thresh, exit_gamma_drop_thresh, exit_iv_crush_thresh) in database.py and add input fields for them in Settings.js.
+Verification:
+
+Simulate a trade and then simulate Greek values that would trigger these exits. Confirm the trade is closed with the correct reason.
+Task 3.2: Implement Time-Based Exit
+
+Objective: Automatically close trades if they are still open near the end of the trading day to avoid overnight risk.
+
+Affected Files:
+
+e:\project\start-main\backend\logic.py (check_exit_conditions)
+e:\project\start-main\backend\main.py (run_greek_confirmation calls check_exit_conditions)
+e:\project\start-main\backend\database.py (for new settings)
+e:\project\start-main\frontend\src\Settings.js (for new settings)
+Detailed Steps:
+
+Modify check_exit_conditions (logic.py):
+This function will need access to the current time and the market close time.
+Implement the time-based exit rule: If datetime.datetime.now() is within X minutes of market close (e.g., 60 minutes), return "Time-based Exit".
+Add Settings: Introduce a new setting eod_exit_minutes in database.py and add an input field for it in Settings.js.
+Verification:
+
+Test near market close (or by temporarily adjusting the market close time in the code) to ensure active trades are closed automatically.
+Phase 4: Refinements and Settings
+Objective: Ensure the UI accurately reflects the new logic and all new thresholds are configurable.
+
+Task 4.1: Update get_signals and Signals.js for New Logic
+
+Objective: The Signals page should provide transparency into the new entry and exit conditions.
+
+Affected Files:
+
+e:\project\start-main\backend\main.py (get_signals endpoint)
+e:\project\start-main\frontend\src\Signals.js
+Detailed Steps:
+
+Modify get_signals (main.py): Ensure this endpoint returns any new calculated features or intermediate states that are relevant for the new entry/exit logic (e.g., retest percentage, candle type identification).
+Modify Signals.js:
+Add new sections or expand existing ones to display the conditions for "Continuation", "Breakout", and "Reversal" entries.
+Add a section to show the status of Greek-based exit conditions.
+This will involve fetching the new data from get_signals and rendering it in a checklist format similar to Bias and Market Type.
+Verification:
+
+Visually inspect the Signals page to confirm all new logic conditions are displayed correctly with their pass/fail status.
+Task 4.2: Add All New Thresholds to Settings
+
+Objective: Make all new thresholds configurable via the Settings page.
+
+Affected Files:
+
+e:\project\start-main\backend\database.py
+e:\project\start-main\frontend\src\Settings.js
+Detailed Steps:
+
+Modify database.py: Add default values for all new settings introduced in Tasks 2.1, 2.2, 3.1, and 3.2 to the get_default_settings function.
+Modify Settings.js: Add new input fields for each of these settings, grouped logically (e.g., "Continuation Entry Thresholds", "Greek Exit Thresholds").
+Verification:
+
+Navigate to the Settings page, confirm all new settings are visible, can be updated, and persist after a refresh.

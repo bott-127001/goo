@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './Dashboard.css';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import SystemStatus from './SystemStatus';
-import LiveMarketOverview from './LiveMarketOverview';
+import LiveMarketOverview from './LiveMarketOverview'; // Assuming this is a component, not a page
 import GreeksMonitor from './GreeksMonitor';
 import ActiveTradeBox from './ActiveTradeBox';
 
@@ -81,40 +81,8 @@ const Dashboard = () => {
     };
   }, [location.search]);
 
-  const handleLogout = async () => {
-    const searchParams = new URLSearchParams(location.search);
-    const userName = searchParams.get('user');
-    if (!userName) return;
-
-    try {
-      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || window.location.origin;
-      await fetch(`${apiBaseUrl}/logout`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_name: userName }),
-      });
-      // Redirect to login page after successful logout
-      navigate('/');
-    } catch (err) {
-      console.error("Logout failed:", err);
-      // Still redirect even if the API call fails, as the user wants to log out.
-      navigate('/');
-    }
-  };
-
   return (
     <div className="dashboard">
-      <header className="dashboard-header">
-        <h1>Trading Dashboard</h1>
-        <nav className="dashboard-nav">
-            <Link to={`/dashboard${location.search}`}>Dashboard</Link>
-            <Link to={`/signals${location.search}`}>Signals</Link>
-            <Link to={`/logs${location.search}`}>Logs</Link>
-            <Link to={`/settings${location.search}`}>Settings</Link>
-            <Link to={`/option-chain${location.search}`}>Option Chain</Link>
-            <button onClick={handleLogout} className="logout-button">Logout</button>
-        </nav>
-      </header>
       {error && <p className="error-message">{error}</p>}
       <div className="dashboard-grid">
         <div className="widget-container">

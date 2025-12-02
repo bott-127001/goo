@@ -150,10 +150,11 @@ def run_greek_confirmation(user_name: str):
         delta_slope = calculations.calculate_delta_slope(user_state["delta_buffer"])
         gamma_change_percent = calculations.calculate_gamma_change_percent(user_state["gamma_buffer"])
         iv_trend = calculations.calculate_iv_trend(user_state["iv_buffer"])
+        theta_change_percent = calculations.calculate_theta_change_percent(user_state["theta_buffer"])
 
         settings = database.get_settings()
         # Run the confirmation logic
-        confirmed_candidate = logic.confirm_with_greeks(candidate, delta_slope, gamma_change_percent, iv_trend, settings)
+        confirmed_candidate = logic.confirm_with_greeks(candidate, delta_slope, gamma_change_percent, iv_trend, theta_change_percent, settings)
 
         # If the signal is approved, calculate SL/Target and update the log
         if confirmed_candidate and confirmed_candidate.get("status") == "ENTRY_APPROVED":
@@ -178,7 +179,13 @@ def run_greek_confirmation(user_name: str):
     # --- State 2: Monitor Active Trade for Exit ---
     if candidate.get("status") == "ENTRY_APPROVED":
         latest_premium = user_state["premium_buffer"][-1] if user_state["premium_buffer"] else 0
-        exit_reason = logic.check_exit_conditions(candidate, latest_premium)
+        
+        # Pass current Greek values to the exit condition checker
+        delta_slope = calculations.calculate_delta_slope(user_state["delta_buffer"])
+        gamma_change_percent = calculations.calculate_gamma_change_percent(user_state["gamma_buffer"])
+        iv_trend = calculations.calculate_iv_trend(user_state["iv_buffer"])
+        settings = database.get_settings()
+        exit_reason = logic.check_exit_conditions(candidate, latest_premium, delta_slope, gamma_change_percent, iv_trend, settings)
 
         if exit_reason:
             print(f"!!! [{user_name}] EXIT CONDITION MET: {exit_reason} !!!")
@@ -379,6 +386,11 @@ def get_signals(user_name: str = None):
     swing_points = calculations.find_swing_points(user_state["candles_5min_buffer"])
     body_ratio = calculations.calculate_body_ratio(user_state["candles_5min_buffer"])
 
+    # Add latest price for context on the signals page
+    latest_price = user_state["price_buffer"][-1] if user_state["price_buffer"] else 0
+    last_swing_high = max([p['price'] for p in swing_points if p['type'] == 'high'], default=None)
+    last_swing_low = min([p['price'] for p in swing_points if p['type'] == 'low'], default=None)
+
     return {
         "delta_slope": delta_slope,
         "gamma_change_percent": gamma_change_percent,
@@ -389,6 +401,9 @@ def get_signals(user_name: str = None):
         "atr_14": atr_14,
         "swing_points": swing_points,
         "latest_candle_body_ratio": body_ratio,
+        "latest_price": latest_price,
+        "last_swing_high": last_swing_high,
+        "last_swing_low": last_swing_low,
     }
 
 @api_router.get("/status")

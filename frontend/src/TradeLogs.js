@@ -26,17 +26,6 @@ const TradeLogs = () => {
 
   return (
     <div className="logs-page">
-      <header className="logs-header">
-        <h1>Trade Logs</h1>
-        <nav className="dashboard-nav">
-          <Link to={`/dashboard${location.search}`}>Dashboard</Link>
-          <Link to={`/signals${location.search}`}>Signals</Link>
-          <Link to={`/logs${location.search}`}>Logs</Link>
-          <Link to={`/settings${location.search}`}>Settings</Link>
-          <Link to={`/option-chain${location.search}`}>Option Chain</Link>
-        </nav>
-      </header>
-
       <div className="logs-table-container">
         <table>
           <thead>

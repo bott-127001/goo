@@ -6,9 +6,16 @@ const Login = () => {
   const prajwalClientId = process.env.REACT_APP_PRAJWAL_UPSTOX_CLIENT_ID;
 
   const handleLogin = (user) => {
-    // Dynamically construct the redirect URI based on the API's location.
-    const appBaseUrl = window.location.origin; // e.g., https://goo-eca7.onrender.com
-    const redirectUri = `${appBaseUrl}/auth/upstox/callback`;
+    let redirectUri;
+    // In development, we must point directly to the backend server for the callback.
+    // The 'proxy' in package.json doesn't work for browser redirects.
+    if (process.env.NODE_ENV === 'development') {
+      redirectUri = 'http://localhost:8000/auth/upstox/callback';
+    } else {
+      // In production, the origin is the same for frontend and backend.
+      redirectUri = `${window.location.origin}/auth/upstox/callback`;
+    }
+
     let clientId;
 
     if (user === 'samarth') {

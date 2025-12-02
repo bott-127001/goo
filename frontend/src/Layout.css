@@ -1,0 +1,77 @@
+.app-header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: #2d2d2d; /* Darker background for header */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.app-header h1 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #00aaff;
+    font-size: 2.2rem;
+}
+
+.app-nav {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 15px; /* Space between nav items */
+}
+
+.app-nav a {
+    color: #00aaff;
+    text-decoration: none;
+    padding: 8px 15px;
+    font-size: 1.1rem;
+    border-radius: 4px;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.app-nav a:hover {
+    background-color: #00aaff;
+    color: #1e1e1e;
+}
+
+.logout-button {
+    background-color: #ff4d4d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    margin-left: 15px; /* Keep a bit more space for logout */
+    transition: background-color 0.2s;
+}
+
+.logout-button:hover {
+    background-color: #cc0000;
+}
+
+/* --- Mobile Responsiveness for Layout --- */
+@media (max-width: 768px) {
+    .app-header {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+        padding: 15px;
+    }
+
+    .app-header h1 {
+        font-size: 1.8rem;
+        margin-bottom: 15px;
+    }
+
+    .app-nav {
+        justify-content: flex-start;
+        gap: 10px; /* Smaller gap on mobile */
+    }
+
+    .app-nav a, .logout-button {
+        margin: 0; /* Reset margins, gap handles spacing */
+        padding: 6px 10px;
+        font-size: 1rem;
+    }
+}

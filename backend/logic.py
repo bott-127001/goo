@@ -45,6 +45,7 @@ def determine_bias(swing_points: list, latest_price: float, ema_20: float, delta
     # --- Neutral Bias ---
     return "Neutral"
 
+import datetime
 
 def determine_market_type(atr: float, body_ratio: float, delta_stability: float, gamma_change: float, iv_trend: float, settings: dict) -> str:
     """
@@ -97,11 +98,35 @@ def detect_entry_setup(market_type: str, bias: str, swing_points: list, latest_p
     Detects a price-based entry setup based on the current market type and bias.
     For now, focuses on the Breakout setup for Volatile markets.
     """
-    if bias == "Neutral" or market_type != "Volatile" or not signal_premium:
+    # Guard clause: Only look for entries if bias and market type are favorable.
+    if bias == "Neutral" or market_type not in ["Trendy", "Volatile"] or not signal_premium:
         return None
 
     last_swing_high = max([p['price'] for p in swing_points if p['type'] == 'high'], default=None)
     last_swing_low = min([p['price'] for p in swing_points if p['type'] == 'low'], default=None)
+
+    # --- Continuation Entry Logic (for Trendy Market) ---
+    if market_type == "Trendy":
+        # Bullish Continuation: In a bullish trend, we look for a pullback that respects the structure.
+        if bias == "Bullish" and last_swing_low:
+            # Price Rule: Price has pulled back but has not closed below the last swing low.
+            if latest_price > last_swing_low:
+                return {
+                    "type": "Continuation_Bullish",
+                    "price": latest_price,
+                    "status": "Pending_Greek_Confirmation",
+                    "signal_premium": signal_premium
+                }
+        # Bearish Continuation: In a bearish trend, we look for a pullback that respects the structure.
+        if bias == "Bearish" and last_swing_high:
+            # Price Rule: Price has pulled back but has not closed above the last swing high.
+            if latest_price < last_swing_high:
+                return {
+                    "type": "Continuation_Bearish",
+                    "price": latest_price,
+                    "status": "Pending_Greek_Confirmation",
+                    "signal_premium": signal_premium
+                }
 
     # --- Breakout Entry Logic (for Volatile Market) ---
     if market_type == "Volatile":
@@ -135,14 +160,91 @@ def detect_entry_setup(market_type: str, bias: str, swing_points: list, latest_p
                     "signal_premium": signal_premium
                 }
 
+        # --- Reversal Entry Logic (also for Volatile Market) ---
+        # Bullish Reversal: Price rejects a key low and shows reversal signs.
+        if bias == "Bullish" and last_swing_low:
+            # Price Rule: Price is near the last swing low, suggesting a test of support.
+            is_near_low = abs(latest_price - last_swing_low) / last_swing_low < 0.001 # within 0.1%
+            # Candle Rule: A small body ratio can indicate a reversal candle (like a pin bar).
+            is_reversal_candle = body_ratio < 0.3
+
+            if is_near_low and is_reversal_candle:
+                return {
+                    "type": "Reversal_Bullish",
+                    "price": latest_price,
+                    "status": "Pending_Greek_Confirmation",
+                    "signal_premium": signal_premium
+                }
+
+        # Bearish Reversal: Price rejects a key high and shows reversal signs.
+        if bias == "Bearish" and last_swing_high:
+            is_near_high = abs(latest_price - last_swing_high) / last_swing_high < 0.001 # within 0.1%
+            is_reversal_candle = body_ratio < 0.3
+
+            if is_near_high and is_reversal_candle:
+                return {
+                    "type": "Reversal_Bearish",
+                    "price": latest_price,
+                    "status": "Pending_Greek_Confirmation",
+                    "signal_premium": signal_premium
+                }
     return None
 
-def confirm_with_greeks(candidate: dict, delta_slope: float, gamma_change: float, iv_trend: float, settings: dict) -> dict:
+def confirm_with_greeks(candidate: dict, delta_slope: float, gamma_change: float, iv_trend: float, theta_change: float, settings: dict) -> dict:
     """
     Confirms a pending setup with live Greek data.
     """
     if not candidate or candidate.get("status") != "Pending_Greek_Confirmation":
         return candidate
+
+    # --- Continuation Confirmation Rules ---
+    if "Continuation" in candidate["type"]:
+        # Get thresholds from settings
+        min_conditions = int(settings.get('cont_conditions_met', 2))
+        delta_thresh = float(settings.get('cont_delta_thresh', 0.01))
+        gamma_thresh = float(settings.get('cont_gamma_thresh', 3.0))
+        iv_thresh = float(settings.get('cont_iv_thresh', 0.0))
+        theta_thresh = float(settings.get('cont_theta_thresh', 5.0))
+
+        conditions_met = 0
+        if candidate["type"] == "Continuation_Bullish":
+            if delta_slope >= delta_thresh: conditions_met += 1
+            if gamma_change >= gamma_thresh: conditions_met += 1
+            if iv_trend >= iv_thresh: conditions_met += 1
+            if theta_change < theta_thresh: conditions_met += 1
+        elif candidate["type"] == "Continuation_Bearish":
+            if delta_slope <= -delta_thresh: conditions_met += 1
+            if gamma_change >= gamma_thresh: conditions_met += 1 # Gamma expansion is good for both
+            if iv_trend >= iv_thresh: conditions_met += 1
+            if theta_change < theta_thresh: conditions_met += 1
+
+        if conditions_met >= min_conditions:
+            candidate["status"] = "ENTRY_APPROVED"
+            print(f"!!! ENTRY APPROVED: {candidate['type']} at {candidate['price']} !!!")
+
+    # --- Reversal Confirmation Rules ---
+    if "Reversal" in candidate["type"]:
+        min_conditions = int(settings.get('rev_conditions_met', 2))
+        delta_flip_thresh = float(settings.get('rev_delta_flip_thresh', 0.02))
+        gamma_drop_thresh = float(settings.get('rev_gamma_drop_thresh', -5.0))
+        iv_drop_thresh = float(settings.get('rev_iv_drop_thresh', -1.0))
+
+        conditions_met = 0
+        # For a bullish reversal, we expect bearish momentum to die.
+        # So, we look for the delta slope to flip from negative to positive.
+        if candidate["type"] == "Reversal_Bullish":
+            if delta_slope >= delta_flip_thresh: conditions_met += 1 # Delta has flipped to positive
+            if gamma_change <= gamma_drop_thresh: conditions_met += 1 # Gamma momentum drops
+            if iv_trend <= iv_drop_thresh: conditions_met += 1 # IV (fear) is dropping
+        # For a bearish reversal, we expect bullish momentum to die.
+        elif candidate["type"] == "Reversal_Bearish":
+            if delta_slope <= -delta_flip_thresh: conditions_met += 1 # Delta has flipped to negative
+            if gamma_change <= gamma_drop_thresh: conditions_met += 1 # Gamma momentum drops
+            if iv_trend <= iv_drop_thresh: conditions_met += 1 # IV (greed) is dropping
+
+        if conditions_met >= min_conditions:
+            candidate["status"] = "ENTRY_APPROVED"
+            print(f"!!! ENTRY APPROVED: {candidate['type']} at {candidate['price']} !!!")
 
     # --- Breakout Confirmation Rules ---
     if "Breakout" in candidate["type"]:
@@ -172,23 +274,58 @@ def confirm_with_greeks(candidate: dict, delta_slope: float, gamma_change: float
 
     return candidate
 
-def check_exit_conditions(active_trade: dict, latest_premium: float) -> str | None:
+def check_exit_conditions(active_trade: dict, latest_premium: float, delta_slope: float, gamma_change: float, iv_trend: float, settings: dict) -> str | None:
     """
-    Checks if an active trade should be exited based on SL or Target.
+    Checks if an active trade should be exited based on SL/Target or Greek conditions.
     
     Args:
         active_trade (dict): The active trade object with 'stop_loss' and 'target'.
         latest_premium (float): The current market price of the option.
+        delta_slope (float): The current slope of delta.
+        gamma_change (float): The current percentage change in gamma.
+        iv_trend (float): The current trend of implied volatility.
+        settings (dict): The application settings.
 
     Returns:
         str: A string describing the exit reason, or None if no exit condition is met.
     """
     if not latest_premium:
         return None
-        
+    
+    # --- Price-Based Exits ---
     if latest_premium <= active_trade.get('stop_loss', 0):
         return f"StopLoss Hit at {latest_premium}"
     if latest_premium >= active_trade.get('target', float('inf')):
         return f"Target Hit at {latest_premium}"
     
+    # --- Greek-Based Exits ---
+    delta_flip_thresh = float(settings.get('exit_delta_flip_thresh', 0.02))
+    gamma_drop_thresh = float(settings.get('exit_gamma_drop_thresh', -5.0))
+    iv_crush_thresh = float(settings.get('exit_iv_crush_thresh', -1.5))
+
+    trade_type = active_trade.get("type", "")
+
+    # Delta Reversal Check
+    if "Bullish" in trade_type and delta_slope < -delta_flip_thresh:
+        return "Greek Exit: Delta Reversal"
+    if "Bearish" in trade_type and delta_slope > delta_flip_thresh:
+        return "Greek Exit: Delta Reversal"
+
+    # Gamma Drop and IV Crush Checks
+    if gamma_change < gamma_drop_thresh:
+        return "Greek Exit: Gamma Drop"
+    if iv_trend < iv_crush_thresh:
+        return "Greek Exit: IV Crush"
+
+    # --- Time-Based Exit ---
+    eod_exit_minutes = int(settings.get('eod_exit_minutes', 60))
+    # Market close is 10:00 AM UTC (3:30 PM IST)
+    market_close_time_utc = datetime.time(10, 0)
+    # Calculate the time when the EOD exit should trigger
+    exit_trigger_time = (datetime.datetime.combine(datetime.date.today(), market_close_time_utc) - datetime.timedelta(minutes=eod_exit_minutes)).time()
+    
+    now_utc_time = datetime.datetime.utcnow().time()
+    if now_utc_time >= exit_trigger_time:
+        return "Time-based Exit (EOD)"
+
     return None

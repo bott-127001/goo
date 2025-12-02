@@ -43,6 +43,23 @@ def init_db():
     conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('atr_neutral_max', '10')")
     conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('atr_trendy_min', '10')")
     conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('atr_trendy_max', '18')")
+    # Add new Continuation Entry thresholds
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('cont_delta_thresh', '0.01')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('cont_gamma_thresh', '3.0')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('cont_iv_thresh', '0.0')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('cont_theta_thresh', '5.0')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('cont_conditions_met', '2')")
+    # Add new Reversal Entry thresholds
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rev_delta_flip_thresh', '0.02')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rev_gamma_drop_thresh', '-5.0')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rev_iv_drop_thresh', '-1.0')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rev_conditions_met', '2')")
+    # Add new Greek Exit thresholds
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('exit_delta_flip_thresh', '0.02')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('exit_gamma_drop_thresh', '-5.0')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('exit_iv_crush_thresh', '-1.5')")
+    # Add new Time-Based Exit threshold
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('eod_exit_minutes', '60')")
     conn.commit()
     conn.close()
     print("Database initialized.")

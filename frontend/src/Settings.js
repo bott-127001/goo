@@ -13,7 +13,20 @@ const Settings = () => {
     confirm_conditions_met: '',
     atr_neutral_max: '',
     atr_trendy_min: '',
-    atr_trendy_max: ''
+    atr_trendy_max: '',
+    cont_delta_thresh: '',
+    cont_gamma_thresh: '',
+    cont_iv_thresh: '',
+    cont_theta_thresh: '',
+    cont_conditions_met: '',
+    rev_delta_flip_thresh: '',
+    rev_gamma_drop_thresh: '',
+    rev_iv_drop_thresh: '',
+    rev_conditions_met: '',
+    exit_delta_flip_thresh: '',
+    exit_gamma_drop_thresh: '',
+    exit_iv_crush_thresh: '',
+    eod_exit_minutes: ''
   });
   const [message, setMessage] = useState('');
   const location = useLocation();
@@ -59,17 +72,6 @@ const Settings = () => {
 
   return (
     <div className="settings-page">
-      <header className="settings-header">
-        <h1>Strategy Settings</h1>
-        <nav className="dashboard-nav">
-          <Link to={`/dashboard${location.search}`}>Dashboard</Link>
-          <Link to={`/signals${location.search}`}>Signals</Link>
-          <Link to={`/logs${location.search}`}>Logs</Link>
-          <Link to={`/settings${location.search}`}>Settings</Link>
-          <Link to={`/option-chain${location.search}`}>Option Chain</Link>
-        </nav>
-      </header>
-
       {message && <div className="save-message">{message}</div>}
 
       <div className="settings-form">
@@ -87,6 +89,27 @@ const Settings = () => {
           <label htmlFor="cooldown_minutes">Cooldown After Trade (minutes)</label>
           <input type="number" id="cooldown_minutes" name="cooldown_minutes" value={settings.cooldown_minutes} onChange={handleInputChange} />
           <button onClick={() => handleSave('cooldown_minutes')}>Save</button>
+        </div>
+        <div className="form-group">
+          <label htmlFor="eod_exit_minutes">Exit Before EOD (minutes)</label>
+          <input type="number" id="eod_exit_minutes" name="eod_exit_minutes" value={settings.eod_exit_minutes} onChange={handleInputChange} />
+          <button onClick={() => handleSave('eod_exit_minutes')}>Save</button>
+        </div>
+        <div className="form-group-divider">Greek Exit Thresholds</div>
+        <div className="form-group">
+          <label htmlFor="exit_delta_flip_thresh">Exit on Delta Flip</label>
+          <input type="number" step="0.01" id="exit_delta_flip_thresh" name="exit_delta_flip_thresh" value={settings.exit_delta_flip_thresh} onChange={handleInputChange} />
+          <button onClick={() => handleSave('exit_delta_flip_thresh')}>Save</button>
+        </div>
+        <div className="form-group">
+          <label htmlFor="exit_gamma_drop_thresh">Exit on Gamma Drop (%)</label>
+          <input type="number" step="0.1" id="exit_gamma_drop_thresh" name="exit_gamma_drop_thresh" value={settings.exit_gamma_drop_thresh} onChange={handleInputChange} />
+          <button onClick={() => handleSave('exit_gamma_drop_thresh')}>Save</button>
+        </div>
+        <div className="form-group">
+          <label htmlFor="exit_iv_crush_thresh">Exit on IV Crush</label>
+          <input type="number" step="0.1" id="exit_iv_crush_thresh" name="exit_iv_crush_thresh" value={settings.exit_iv_crush_thresh} onChange={handleInputChange} />
+          <button onClick={() => handleSave('exit_iv_crush_thresh')}>Save</button>
         </div>
         <div className="form-group-divider">Greek Confirmation Thresholds</div>
         <div className="form-group">
@@ -108,6 +131,53 @@ const Settings = () => {
           <label htmlFor="confirm_conditions_met">Conditions to Meet</label>
           <input type="number" step="1" id="confirm_conditions_met" name="confirm_conditions_met" value={settings.confirm_conditions_met} onChange={handleInputChange} />
           <button onClick={() => handleSave('confirm_conditions_met')}>Save</button>
+        </div>
+        <div className="form-group-divider">Continuation Entry Thresholds</div>
+        <div className="form-group">
+          <label htmlFor="cont_delta_thresh">Continuation Delta Slope</label>
+          <input type="number" step="0.01" id="cont_delta_thresh" name="cont_delta_thresh" value={settings.cont_delta_thresh} onChange={handleInputChange} />
+          <button onClick={() => handleSave('cont_delta_thresh')}>Save</button>
+        </div>
+        <div className="form-group">
+          <label htmlFor="cont_gamma_thresh">Continuation Gamma Change (%)</label>
+          <input type="number" step="0.1" id="cont_gamma_thresh" name="cont_gamma_thresh" value={settings.cont_gamma_thresh} onChange={handleInputChange} />
+          <button onClick={() => handleSave('cont_gamma_thresh')}>Save</button>
+        </div>
+        <div className="form-group">
+          <label htmlFor="cont_iv_thresh">Continuation IV Trend</label>
+          <input type="number" step="0.1" id="cont_iv_thresh" name="cont_iv_thresh" value={settings.cont_iv_thresh} onChange={handleInputChange} />
+          <button onClick={() => handleSave('cont_iv_thresh')}>Save</button>
+        </div>
+        <div className="form-group">
+          <label htmlFor="cont_theta_thresh">Continuation Theta Change (%)</label>
+          <input type="number" step="0.1" id="cont_theta_thresh" name="cont_theta_thresh" value={settings.cont_theta_thresh} onChange={handleInputChange} />
+          <button onClick={() => handleSave('cont_theta_thresh')}>Save</button>
+        </div>
+        <div className="form-group">
+          <label htmlFor="cont_conditions_met">Continuation Conditions to Meet</label>
+          <input type="number" step="1" id="cont_conditions_met" name="cont_conditions_met" value={settings.cont_conditions_met} onChange={handleInputChange} />
+          <button onClick={() => handleSave('cont_conditions_met')}>Save</button>
+        </div>
+        <div className="form-group-divider">Reversal Entry Thresholds</div>
+        <div className="form-group">
+          <label htmlFor="rev_delta_flip_thresh">Reversal Delta Flip</label>
+          <input type="number" step="0.01" id="rev_delta_flip_thresh" name="rev_delta_flip_thresh" value={settings.rev_delta_flip_thresh} onChange={handleInputChange} />
+          <button onClick={() => handleSave('rev_delta_flip_thresh')}>Save</button>
+        </div>
+        <div className="form-group">
+          <label htmlFor="rev_gamma_drop_thresh">Reversal Gamma Drop (%)</label>
+          <input type="number" step="0.1" id="rev_gamma_drop_thresh" name="rev_gamma_drop_thresh" value={settings.rev_gamma_drop_thresh} onChange={handleInputChange} />
+          <button onClick={() => handleSave('rev_gamma_drop_thresh')}>Save</button>
+        </div>
+        <div className="form-group">
+          <label htmlFor="rev_iv_drop_thresh">Reversal IV Drop</label>
+          <input type="number" step="0.1" id="rev_iv_drop_thresh" name="rev_iv_drop_thresh" value={settings.rev_iv_drop_thresh} onChange={handleInputChange} />
+          <button onClick={() => handleSave('rev_iv_drop_thresh')}>Save</button>
+        </div>
+        <div className="form-group">
+          <label htmlFor="rev_conditions_met">Reversal Conditions to Meet</label>
+          <input type="number" step="1" id="rev_conditions_met" name="rev_conditions_met" value={settings.rev_conditions_met} onChange={handleInputChange} />
+          <button onClick={() => handleSave('rev_conditions_met')}>Save</button>
         </div>
         <div className="form-group-divider">Market Type Thresholds (ATR)</div>
         <div className="form-group">

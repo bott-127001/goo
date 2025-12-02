@@ -24,8 +24,17 @@ samarth_client_id = os.getenv("SAMARTH_UPSTOX_CLIENT_ID")
 samarth_client_secret = os.getenv("SAMARTH_UPSTOX_CLIENT_SECRET")
 prajwal_client_id = os.getenv("PRAJWAL_UPSTOX_CLIENT_ID")
 prajwal_client_secret = os.getenv("PRAJWAL_UPSTOX_CLIENT_SECRET")
-redirect_uri = os.getenv("UPSTOX_REDIRECT_URI")
-frontend_base_url = os.getenv("FRONTEND_URL", "http://localhost:3000") # Default for local dev
+
+# Determine the redirect URI based on the environment
+if os.getenv("RENDER"): # RENDER is an environment variable set by Render.com
+    # In production, the redirect URI is based on the Render service's public URL.
+    # We assume this is set in an environment variable.
+    redirect_uri = os.getenv("UPSTOX_REDIRECT_URI")
+else:
+    # In local development, the redirect URI points directly to our backend server.
+    redirect_uri = "http://localhost:8000/auth/upstox/callback"
+
+frontend_base_url = "http://localhost:3000" # Default for local dev
 
 user_credentials = {} # Keyed by user name ('samarth', 'prajwal')
 
@@ -90,8 +99,13 @@ async def upstox_callback(code: str, state: str, request: Request):
         start_user_scheduler(user_name)
 
         # Redirect to the frontend with the access token and user identifier
-        frontend_url = f"{frontend_base_url}/dashboard?access_token={access_token}&user={user_name}"
-        return RedirectResponse(url=frontend_url)
+        # In production, derive the frontend URL from the redirect URI.
+        if os.getenv("RENDER"):
+            prod_frontend_url = redirect_uri.split('/auth/upstox/callback')[0]
+            return RedirectResponse(url=f"{prod_frontend_url}/dashboard?user={user_name}")
+        else:
+            # In development, redirect back to the React dev server.
+            return RedirectResponse(url=f"{frontend_base_url}/dashboard?user={user_name}")
     except requests.exceptions.RequestException as e: # Catch network-level errors
         print(f"Error exchanging token for {user_name}: {e}")
         raise HTTPException(status_code=500, detail=f"Network error while communicating with Upstox: {e}")
