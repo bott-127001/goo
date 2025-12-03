@@ -75,58 +75,116 @@ def determine_market_type(candles_5min_buffer: list, market_type_window_size: in
 
     return "Neutral" # Default if no other type is met
 
-def detect_entry_setup(bias: str, market_type: str, candles_5min_buffer: list, latest_price: float, signal_premium: float, settings: dict) -> dict | None:
+def detect_entry_setup(bias: str, market_type: str, candles_5min_buffer: list, latest_price: float, signal_premium: float, price_action_state: dict, settings: dict) -> dict | None:
     """
     The new "Four-Layer Entry Engine".
-    This is a placeholder structure. The actual BOS/Retest logic will be built out next.
+    Manages the price action state and detects trade setups.
+    Returns a dictionary for a trade setup, a state update, or None.
     """
     # --- Layer 1: Bias Check ---
     if bias == "Neutral":
-        return None
+        return {"action": "reset_state"} # If bias is neutral, reset any pending price action state
 
     # --- Layer 2: Market Type Check ---
     if market_type not in ["Trendy", "Volatile"]:
         return None
 
     # --- Layer 3: Price Setup (BOS/Retest) ---
-    # This is where we will call the new `check_bos` and `check_retest` functions
-    # from calculations.py once they are built.
-    price_setup_found = None
-    if market_type == "Trendy" and bias == "Bullish":
-        # price_setup_found = calculations.check_bullish_retest(...)
-        pass
-    elif market_type == "Volatile" and bias == "Bullish":
-        # price_setup_found = calculations.check_bullish_bos(...)
-        pass
-    # ... and so on for Bearish setups
+    if price_action_state.get("status") == "LOOKING_FOR_BOS":
+        bos_result = None
+        if bias == "Bullish":
+            bos_result = calculations.check_bullish_bos(candles_5min_buffer, settings, price_action_state)
+        elif bias == "Bearish":
+            bos_result = calculations.check_bearish_bos(candles_5min_buffer, settings, price_action_state)
 
-    if not price_setup_found:
-        return None
+        if bos_result:
+            # A Break of Structure was found. Now decide what to do.
+            if market_type == "Volatile":
+                # In a volatile market, enter immediately on the BOS.
+                return {
+                    "action": "trade_setup",
+                    "setup": {
+                        "type": bos_result["type"],
+                        "price": latest_price,
+                        "status": "Pending_Greek_Confirmation",
+                        "signal_premium": signal_premium,
+                    }
+                }
+            elif market_type == "Trendy":
+                # In a trendy market, don't trade yet. Update state to look for a retest.
+                return {
+                    "action": "update_state",
+                    "new_state": {
+                        "status": "LOOKING_FOR_RETEST",
+                        "last_bos_type": "BULLISH" if "BULLISH" in bos_result["type"] else "BEARISH",
+                        "breakout_high": bos_result["breakout_high"],
+                        "breakout_low": bos_result["breakout_low"],
+                        "breakout_candle_timestamp": bos_result["breakout_candle_timestamp"],
+                    }
+                }
 
-    # --- Layer 4: Smoothed Greek Confirmation ---
-    # This will be handled by the `run_greek_confirmation` job in main.py,
-    # which will check the smoothed greeks.
-    # For now, we just create the candidate.
-    
-    # This is a placeholder return. It will be populated with details from the price setup.
-    return {
-        "type": price_setup_found.get("type"), # e.g., "BOS_Bullish" or "Retest_Bullish"
-        "price": latest_price,
-        "status": "Pending_Greek_Confirmation",
-        "signal_premium": signal_premium,
-        "strike_price": price_setup_found.get("strike_price") # Will need to pass this through
-    }
+    elif price_action_state.get("status") == "LOOKING_FOR_RETEST":
+        retest_result = None
+        if price_action_state.get("last_bos_type") == "BULLISH" and bias == "Bullish":
+            retest_result = calculations.check_bullish_retest(latest_price, price_action_state, settings)
+        elif price_action_state.get("last_bos_type") == "BEARISH" and bias == "Bearish":
+            retest_result = calculations.check_bearish_retest(latest_price, price_action_state, settings)
 
-def confirm_with_greeks(candidate: dict, smoothed_greeks: dict, settings: dict) -> dict:
+        if retest_result:
+            if retest_result.get("type") == "INVALIDATED":
+                # The retest failed (e.g., pullback was too deep). Reset the state.
+                return {"action": "reset_state"}
+            else:
+                # A valid retest was found. This is our trade signal.
+                return {
+                    "action": "trade_setup",
+                    "setup": {
+                        "type": retest_result["type"], # e.g., "RETEST_BULLISH"
+                        "price": latest_price,
+                        "status": "Pending_Greek_Confirmation",
+                        "signal_premium": signal_premium,
+                    }
+                }
+
+    return None # No action needed
+
+def confirm_with_greeks(candidate: dict, smoothed_greeks: dict, settings: dict) -> dict | None:
     """
     Confirms a pending setup with live SMOOTHED Greek data.
     """
-    # This function will be updated to use the new smoothed greeks and settings.
-    # For now, we can just approve it for testing purposes.
-    if candidate and candidate.get("status") == "Pending_Greek_Confirmation":
+    if not candidate or candidate.get("status") != "Pending_Greek_Confirmation":
+        return None
+
+    # Get thresholds from settings, with defaults
+    delta_thresh = float(settings.get('entry_delta_slope_thresh', 0.01))
+    gamma_thresh = float(settings.get('entry_gamma_change_thresh', 5.0))
+    iv_thresh = float(settings.get('entry_iv_trend_thresh', 0.5))
+    theta_thresh = float(settings.get('entry_theta_max_spike', 5.0))
+
+    # Get smoothed values
+    delta_slope = smoothed_greeks.get("delta_slope", 0.0)
+    gamma_change = smoothed_greeks.get("gamma_change", 0.0)
+    iv_trend = smoothed_greeks.get("iv_trend", 0.0)
+    theta_change = smoothed_greeks.get("theta_change", 0.0)
+
+    # Check conditions based on trade direction
+    is_confirmed = False
+    if "BULLISH" in candidate["type"]:
+        # For bullish, we want positive delta slope, positive gamma change, and positive IV trend.
+        # We also want to ensure theta decay isn't spiking against us.
+        if (delta_slope >= delta_thresh and gamma_change >= gamma_thresh and iv_trend >= iv_thresh and abs(theta_change) < theta_thresh):
+            is_confirmed = True
+    elif "BEARISH" in candidate["type"]:
+        # For bearish, we want negative delta slope, but still positive gamma and IV expansion.
+        if (delta_slope <= -delta_thresh and gamma_change >= gamma_thresh and iv_trend >= iv_thresh and abs(theta_change) < theta_thresh):
+            is_confirmed = True
+
+    if is_confirmed:
         candidate["status"] = "ENTRY_APPROVED"
-        print(f"!!! (Placeholder) ENTRY APPROVED: {candidate['type']} at {candidate['price']} !!!")
-    return None
+        print(f"!!! GREEK CONFIRMATION PASSED: {candidate['type']} at {candidate['price']} !!!")
+        return candidate
+
+    return None # Not confirmed yet
 
 def check_exit_conditions(active_trade: dict, latest_premium: float, smoothed_greeks: dict, settings: dict) -> str | None:
     """

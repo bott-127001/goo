@@ -161,15 +161,21 @@ def run_greek_confirmation(user_name: str):
 
     # --- State 1: Monitor for Entry Confirmation ---
     if candidate.get("status") == "Pending_Greek_Confirmation":
-        # Calculate latest Greek features from user's buffers
-        delta_slope = calculations.calculate_delta_slope(user_state["delta_buffer"])
-        gamma_change_percent = calculations.calculate_gamma_change_percent(user_state["gamma_buffer"])
-        iv_trend = calculations.calculate_iv_trend(user_state["iv_buffer"])
-        theta_change_percent = calculations.calculate_theta_change_percent(user_state["theta_buffer"])
+        # Calculate smoothed Greek values over a 30-second window for entry confirmation
+        smoothed_greeks = {
+            "delta_slope": calculations.calculate_smoothed_slope(user_state["delta_buffer"], 30),
+            "gamma_change": calculations.calculate_smoothed_percent_change(user_state["gamma_buffer"], 30),
+            "iv_trend": calculations.calculate_smoothed_slope(user_state["iv_buffer"], 30),
+            "theta_change": calculations.calculate_smoothed_percent_change(user_state["theta_buffer"], 30)
+        }
 
         settings = database.get_settings()
         # Run the confirmation logic
-        confirmed_candidate = logic.confirm_with_greeks(candidate, delta_slope, gamma_change_percent, iv_trend, theta_change_percent, settings)
+        confirmed_candidate = logic.confirm_with_greeks(
+            candidate=candidate, 
+            smoothed_greeks=smoothed_greeks, 
+            settings=settings
+        )
 
         # If the signal is approved, calculate SL/Target and update the log
         if confirmed_candidate and confirmed_candidate.get("status") == "ENTRY_APPROVED":
@@ -194,13 +200,16 @@ def run_greek_confirmation(user_name: str):
     # --- State 2: Monitor Active Trade for Exit ---
     if candidate.get("status") == "ENTRY_APPROVED":
         latest_premium = user_state["premium_buffer"][-1] if user_state["premium_buffer"] else 0
-        
-        # Pass current Greek values to the exit condition checker
-        delta_slope = calculations.calculate_delta_slope(user_state["delta_buffer"])
-        gamma_change_percent = calculations.calculate_gamma_change_percent(user_state["gamma_buffer"])
-        iv_trend = calculations.calculate_iv_trend(user_state["iv_buffer"])
+
+        # Calculate smoothed Greek values over a 60-second window for exit monitoring
+        smoothed_greeks_for_exit = {
+            "delta_slope": calculations.calculate_smoothed_slope(user_state["delta_buffer"], 60),
+            "gamma_change": calculations.calculate_smoothed_percent_change(user_state["gamma_buffer"], 60),
+            "iv_trend": calculations.calculate_smoothed_slope(user_state["iv_buffer"], 60),
+        }
+
         settings = database.get_settings()
-        exit_reason = logic.check_exit_conditions(candidate, latest_premium, delta_slope, gamma_change_percent, iv_trend, settings)
+        exit_reason = logic.check_exit_conditions(candidate, latest_premium, smoothed_greeks_for_exit, settings)
 
         if exit_reason:
             print(f"!!! [{user_name}] EXIT CONDITION MET: {exit_reason} !!!")
@@ -265,6 +274,10 @@ def run_logic_controller(user_name: str):
     # --- END OF CHECK ---
     user_state = app_state["users"].get(user_name)
     if not user_state: return
+    
+    # Ensure baseline is set before running logic
+    if not user_state.get("baseline_set"):
+        return
 
     if user_state.get("cooldown_until") and datetime.datetime.now() < user_state.get("cooldown_until"):
         print(f"[{user_name}] Logic controller skipped due to cooldown.")
@@ -272,51 +285,65 @@ def run_logic_controller(user_name: str):
         user_state["bias"], user_state["market_type"] = "Neutral", "Undetermined"
         return
     # 1. Get all calculated features
-    # TODO: This needs to be user-specific as well
-    signals = get_signals(user_name)
     latest_price = user_state["price_buffer"][-1] if user_state["price_buffer"] else 0
+    latest_delta = user_state["delta_buffer"][-1] if user_state["delta_buffer"] else None
+    latest_gamma = user_state["gamma_buffer"][-1] if user_state["gamma_buffer"] else None
+    latest_iv = user_state["iv_buffer"][-1] if user_state["iv_buffer"] else None
     latest_premium = user_state["premium_buffer"][-1] if user_state["premium_buffer"] else 0
 
     # 2. Determine Bias
     bias = logic.determine_bias(
-        swing_points=signals["swing_points"],
-        latest_price=latest_price,
-        ema_20=signals["ema_20"],
-        delta_slope=signals["delta_slope"],
-        gamma_change=signals["gamma_change_percent"],
-        iv_trend=signals["iv_trend"]
+        current_price=latest_price,
+        current_delta=latest_delta,
+        current_gamma=latest_gamma,
+        current_iv=latest_iv,
+        baseline_values=user_state["baseline_values"]
     )
     user_state["bias"] = bias
 
     # 3. Determine Market Type
     settings = database.get_settings()
+    # Update market_type_window_size from settings if it has changed
+    user_state["market_type_window_size"] = int(settings.get("market_type_window_size", 3))
+
     market_type = logic.determine_market_type(
-        atr=signals["atr_14"],
-        body_ratio=signals["latest_candle_body_ratio"],
-        delta_stability=signals["delta_stability"],
-        gamma_change=signals["gamma_change_percent"],
-        iv_trend=signals["iv_trend"],
+        candles_5min_buffer=user_state["candles_5min_buffer"],
+        market_type_window_size=user_state["market_type_window_size"],
         settings=settings
     )
     user_state["market_type"] = market_type
 
     # 4. Detect Entry Setup
-    candidate = logic.detect_entry_setup(
-        market_type=market_type,
+    # This function now returns an action dictionary
+    result = logic.detect_entry_setup(
         bias=bias,
-        swing_points=signals["swing_points"],
+        market_type=market_type,
+        candles_5min_buffer=user_state["candles_5min_buffer"],
         latest_price=latest_price,
-        body_ratio=signals["latest_candle_body_ratio"],
-        signal_premium=latest_premium
+        signal_premium=latest_premium,
+        price_action_state=user_state["price_action_state"],
+        settings=settings
     )
-    user_state["candidate_setup"] = candidate
-    if candidate and candidate.get("status") == "Pending_Greek_Confirmation":
-        # Log the initial detection of a candidate signal
-        log_id = database.log_signal(candidate)
-        if log_id:
-            candidate["log_id"] = log_id
+
+    if result:
+        action = result.get("action")
+        if action == "trade_setup":
+            candidate = result.get("setup")
             user_state["candidate_setup"] = candidate
-    print(f"[{user_name}] Logic Controller Update: Bias={bias}, MarketType={market_type}, Candidate={candidate}")
+            if candidate and candidate.get("status") == "Pending_Greek_Confirmation":
+                log_id = database.log_signal(candidate)
+                if log_id:
+                    candidate["log_id"] = log_id
+                    user_state["candidate_setup"] = candidate
+        elif action == "update_state":
+            user_state["price_action_state"].update(result.get("new_state", {}))
+            print(f"[{user_name}] Price action state updated: {user_state['price_action_state']}")
+        elif action == "reset_state":
+            user_state["price_action_state"]["status"] = "LOOKING_FOR_BOS"
+            user_state["price_action_state"]["last_bos_type"] = None
+            print(f"[{user_name}] Price action state reset to LOOKING_FOR_BOS.")
+
+    print(f"[{user_name}] Logic Controller Update: Bias={bias}, MarketType={market_type}, PA_Status={user_state['price_action_state']['status']}")
 
 def get_user_profile():
     """
@@ -553,8 +580,13 @@ async def websocket_endpoint(websocket: WebSocket, user_name: str):
                 "bias": user_state.get("bias", "Neutral"),
                 "market_type": user_state.get("market_type", "Undetermined"),
                 "candidate_setup": user_state.get("candidate_setup"),
+                "last_exit_reason": user_state.get("last_exit_reason"),
             }
             
+            # Clear the one-time exit reason after adding it to the payload
+            if user_state.get("last_exit_reason"):
+                user_state["last_exit_reason"] = None
+
             await websocket.send_json(payload)
             await asyncio.sleep(2)  # Send updates every 2 seconds
     except Exception as e:

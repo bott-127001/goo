@@ -26,6 +26,14 @@ def get_default_user_state():
         "baseline_values": {},            # Dict to hold Price, Delta, Gamma, IV at baseline
         "market_type_window_size": 3,     # Default to 3 (15-min window)
         "option_chain_data": [],          # To store the full option chain for the UI
+        # --- New state for BOS/Retest Engine ---
+        "price_action_state": {
+            "status": "LOOKING_FOR_BOS",        # Current mode: LOOKING_FOR_BOS or LOOKING_FOR_RETEST
+            "last_bos_type": None,             # 'BULLISH' or 'BEARISH'
+            "breakout_high": None,             # The high of the move that caused the BOS
+            "breakout_low": None,              # The low of the move that caused the BOS
+            "breakout_candle_timestamp": None, # To avoid re-triggering on the same candle
+        },
     }
 
 # The global state now holds a dictionary of user-specific states.

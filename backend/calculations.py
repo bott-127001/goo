@@ -240,34 +240,137 @@ def calculate_average_body_ratio(candles_5min: deque, window_size: int) -> float
     return sum(ratios) / len(ratios) if ratios else 0.0
 
 # --- New Price Action (BOS/Retest) Functions ---
-# These are placeholders. The actual implementation will be more complex and stateful.
 
-def check_bullish_bos(candles_5min_buffer: list, settings: dict) -> dict | None:
+def check_bullish_bos(candles_5min_buffer: deque, settings: dict, price_action_state: dict) -> dict | None:
     """
     Checks for a Bullish Break of Structure.
-    Placeholder: In a real scenario, this would need more robust logic.
+    A BOS occurs when the price closes decisively above the most recent swing high.
     """
-    # This is a simplified placeholder.
-    # A real implementation would need to manage the state of the last BOS.
+    if len(candles_5min_buffer) < 5: # Need a few candles to find a swing point
+        return None
+
+    swing_points = find_swing_points(candles_5min_buffer)
+    swing_highs = [p for p in swing_points if p['type'] == 'high']
+    
+    if not swing_highs:
+        return None
+
+    last_swing_high = swing_highs[-1]
+    latest_candle = candles_5min_buffer[-1]
+    latest_candle_timestamp, _, _, _, latest_close = latest_candle
+
+    # Avoid re-triggering on the same candle that caused the last BOS
+    if price_action_state.get("breakout_candle_timestamp") == latest_candle_timestamp:
+        return None
+
+    bos_buffer_points = float(settings.get('bos_buffer_points', 10.0))
+    
+    # Check for a decisive close above the last swing high
+    if latest_close > last_swing_high['price'] + bos_buffer_points:
+        # Find the swing low that preceded this swing high to define the breakout range
+        swing_lows = [p for p in swing_points if p['type'] == 'low' and p['timestamp'] < last_swing_high['timestamp']]
+        preceding_swing_low = swing_lows[-1] if swing_lows else None
+
+        if preceding_swing_low:
+            return {
+                "type": "BOS_BULLISH",
+                "breakout_high": last_swing_high['price'],
+                "breakout_low": preceding_swing_low['price'],
+                "breakout_candle_timestamp": latest_candle_timestamp
+            }
     return None
 
-def check_bearish_bos(candles_5min_buffer: list, settings: dict) -> dict | None:
+def check_bearish_bos(candles_5min_buffer: deque, settings: dict, price_action_state: dict) -> dict | None:
     """
     Checks for a Bearish Break of Structure.
-    Placeholder.
+    A BOS occurs when the price closes decisively below the most recent swing low.
     """
+    if len(candles_5min_buffer) < 5:
+        return None
+
+    swing_points = find_swing_points(candles_5min_buffer)
+    swing_lows = [p for p in swing_points if p['type'] == 'low']
+
+    if not swing_lows:
+        return None
+
+    last_swing_low = swing_lows[-1]
+    latest_candle = candles_5min_buffer[-1]
+    latest_candle_timestamp, _, _, _, latest_close = latest_candle
+
+    if price_action_state.get("breakout_candle_timestamp") == latest_candle_timestamp:
+        return None
+
+    bos_buffer_points = float(settings.get('bos_buffer_points', 10.0))
+
+    if latest_close < last_swing_low['price'] - bos_buffer_points:
+        swing_highs = [p for p in swing_points if p['type'] == 'high' and p['timestamp'] < last_swing_low['timestamp']]
+        preceding_swing_high = swing_highs[-1] if swing_highs else None
+
+        if preceding_swing_high:
+            return {
+                "type": "BOS_BEARISH",
+                "breakout_high": preceding_swing_high['price'],
+                "breakout_low": last_swing_low['price'],
+                "breakout_candle_timestamp": latest_candle_timestamp
+            }
     return None
 
-def check_bullish_retest(candles_5min_buffer: list, last_bos_info: dict, settings: dict) -> dict | None:
+def check_bullish_retest(latest_price: float, price_action_state: dict, settings: dict) -> dict | None:
     """
     Checks for a valid Bullish Retest after a BOS.
-    Placeholder.
+    A valid retest occurs when price pulls back into a defined percentage range of the breakout move.
     """
+    breakout_high = price_action_state.get("breakout_high")
+    breakout_low = price_action_state.get("breakout_low")
+
+    if not all([breakout_high, breakout_low, latest_price]):
+        return None
+
+    # Invalidation check: If price breaks below the low of the breakout move, the setup is invalid.
+    if latest_price < breakout_low:
+        return {"type": "INVALIDATED"}
+
+    breakout_range = breakout_high - breakout_low
+    if breakout_range <= 0:
+        return None
+
+    pullback_amount = breakout_high - latest_price
+    pullback_percentage = (pullback_amount / breakout_range) * 100
+
+    retest_min = float(settings.get('retest_min_percent', 30.0))
+    retest_max = float(settings.get('retest_max_percent', 60.0))
+
+    if retest_min <= pullback_percentage <= retest_max:
+        return {"type": "RETEST_BULLISH"}
+
     return None
 
-def check_bearish_retest(candles_5min_buffer: list, last_bos_info: dict, settings: dict) -> dict | None:
+def check_bearish_retest(latest_price: float, price_action_state: dict, settings: dict) -> dict | None:
     """
     Checks for a valid Bearish Retest after a BOS.
-    Placeholder.
     """
+    breakout_high = price_action_state.get("breakout_high")
+    breakout_low = price_action_state.get("breakout_low")
+
+    if not all([breakout_high, breakout_low, latest_price]):
+        return None
+
+    # Invalidation check: If price breaks above the high of the breakout move, the setup is invalid.
+    if latest_price > breakout_high:
+        return {"type": "INVALIDATED"}
+
+    breakout_range = breakout_high - breakout_low
+    if breakout_range <= 0:
+        return None
+
+    pullback_amount = latest_price - breakout_low
+    pullback_percentage = (pullback_amount / breakout_range) * 100
+
+    retest_min = float(settings.get('retest_min_percent', 30.0))
+    retest_max = float(settings.get('retest_max_percent', 60.0))
+
+    if retest_min <= pullback_percentage <= retest_max:
+        return {"type": "RETEST_BEARISH"}
+
     return None

@@ -1,0 +1,64 @@
+The Implementation Plan: BOS & Retest Engine
+We will build this in three distinct, logical phases:
+
+State Management: Give the system the "memory" it needs to track price action patterns.
+Calculation Engine: Implement the core mechanical rules for identifying BOS and Retest.
+Logic Integration: Connect the new calculation engine to the "Four-Layer Entry Engine" to make it fully operational.
+Phase 1: State Management - The System's Memory
+Goal: Update the user's state to track the current price action context (e.g., "Are we looking for a breakout or a pullback?").
+
+File to Modify: e:\project\start-main\backend\state.py
+
+Changes: I will add a new dictionary called price_action_state to the get_default_user_state function. This will act as the memory for our price action engine.
+
+price_action_state: A dictionary containing:
+status: A string indicating the current mode. It will start as "LOOKING_FOR_BOS". After a breakout, it will change to "LOOKING_FOR_RETEST".
+last_bos_type: None, "BULLISH", or "BEARISH".
+breakout_high: The peak price of the move that caused the last BOS.
+breakout_low: The lowest price of the move that caused the last BOS.
+breakout_candle_timestamp: The timestamp of the candle that confirmed the BOS, to prevent re-triggering on the same event.
+Phase 2: Calculation Engine - The Mechanical Rules
+Goal: Replace the placeholder functions in calculations.py with the real, mechanical logic to identify BOS and Retest patterns.
+
+File to Modify: e:\project\start-main\backend\calculations.py
+
+Changes:
+
+check_bullish_bos:
+
+It will take the candles_5min_buffer and settings as input.
+It will use find_swing_points to identify the most recent, valid swing high.
+It will check if the latest candle's close price is greater than last_swing_high + bos_buffer_points.
+If a BOS is confirmed, it will return a dictionary containing the type ("BOS_BULLISH"), the breakout_high, and the breakout_low of the move.
+check_bearish_bos:
+
+Will implement the inverse logic for a bearish breakout.
+check_bullish_retest:
+
+This function will now take the latest_price and the new price_action_state (the system's memory) as input.
+It will calculate the breakout_range using the breakout_high and breakout_low stored in the state.
+It will calculate the current pullback_percentage.
+It will check if this percentage is within the retest_min_percent and retest_max_percent from your settings.
+Crucially, it will also check that the price has not pulled back too far (i.e., invalidated the structure).
+If a valid retest is found, it will return a dictionary with the type ("RETEST_BULLISH").
+check_bearish_retest:
+
+Will implement the inverse logic for a bearish retest.
+Phase 3: Logic Integration - Activating the Engine
+Goal: Connect the new calculation functions to the main logic controller, making the system capable of generating real signals.
+
+File to Modify: e:\project\start-main\backend\logic.py
+
+Changes:
+
+detect_entry_setup: This function will be significantly updated to manage the new price_action_state.
+It will first check the price_action_state['status'].
+If status is "LOOKING_FOR_BOS":
+It will call check_bullish_bos or check_bearish_bos based on the day's bias.
+If a BOS is found, it will not generate a trade signal immediately. Instead, it will update the state: price_action_state['status'] will be set to "LOOKING_FOR_RETEST", and the breakout details will be saved.
+However, if the market_type is "Volatile", it will generate an immediate "BOS_Entry" signal and not change the state to look for a retest.
+If status is "LOOKING_FOR_RETEST":
+It will call check_bullish_retest or check_bearish_retest.
+If a valid retest is found, it will return the price_setup_found dictionary, which will then proceed to Layer 4 (Greek Confirmation).
+After a successful retest signal, it will reset the state back to "LOOKING_FOR_BOS" to prepare for the next cycle.
+If the price invalidates the structure (e.g., moves too far), it will also reset the state back to "LOOKING_FOR_BOS".
