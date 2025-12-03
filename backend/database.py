@@ -31,35 +31,23 @@ def init_db():
         )
     ''')
     # Insert default settings if they don't exist
+    # --- Core Trade Management Settings ---
     conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('risk_reward_ratio', '2.0')")
     conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('risk_percent', '1.0')")
     conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('cooldown_minutes', '15')")
-    # Add new Greek confirmation thresholds
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('confirm_delta_slope', '0.02')")
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('confirm_gamma_change', '8.0')")
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('confirm_iv_trend', '1.0')")
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('confirm_conditions_met', '2')")
-    # Add new Market Type thresholds
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('atr_neutral_max', '10')")
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('atr_trendy_min', '10')")
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('atr_trendy_max', '18')")
-    # Add new Continuation Entry thresholds
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('cont_delta_thresh', '0.01')")
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('cont_gamma_thresh', '3.0')")
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('cont_iv_thresh', '0.0')")
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('cont_theta_thresh', '5.0')")
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('cont_conditions_met', '2')")
-    # Add new Reversal Entry thresholds
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rev_delta_flip_thresh', '0.02')")
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rev_gamma_drop_thresh', '-5.0')")
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rev_iv_drop_thresh', '-1.0')")
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rev_conditions_met', '2')")
-    # Add new Greek Exit thresholds
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('exit_delta_flip_thresh', '0.02')")
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('exit_gamma_drop_thresh', '-5.0')")
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('exit_iv_crush_thresh', '-1.5')")
-    # Add new Time-Based Exit threshold
     conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('eod_exit_minutes', '60')")
+
+    # --- New Strategy Settings ---
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('market_type_window_size', '3')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('bos_buffer_points', '10')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('retest_min_percent', '30')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('retest_max_percent', '60')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('entry_delta_slope_thresh', '0.01')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('entry_gamma_change_thresh', '5.0')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('entry_iv_trend_thresh', '0.5')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('entry_theta_max_spike', '5.0')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('exit_iv_crush_thresh', '-2.0')")
+
     conn.commit()
     conn.close()
     print("Database initialized.")

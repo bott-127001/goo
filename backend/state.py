@@ -19,6 +19,13 @@ def get_default_user_state():
         "market_type": "Undetermined",
         "candidate_setup": None,
         "cooldown_until": None,
+        # --- New state fields for refined strategy ---
+        "login_timestamp": None,          # To track when the session started
+        "baseline_set": False,            # Flag to check if baseline is captured
+        "baseline_timestamp": None,       # The exact time baseline was captured
+        "baseline_values": {},            # Dict to hold Price, Delta, Gamma, IV at baseline
+        "market_type_window_size": 3,     # Default to 3 (15-min window)
+        "option_chain_data": [],          # To store the full option chain for the UI
     }
 
 # The global state now holds a dictionary of user-specific states.

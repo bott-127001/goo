@@ -1,293 +1,136 @@
-def determine_bias(swing_points: list, latest_price: float, ema_20: float, delta_slope: float, gamma_change: float, iv_trend: float) -> str:
+import datetime
+from . import calculations # Assuming calculations.py will be updated with new functions
+
+def determine_bias(current_price: float, current_delta: float, current_gamma: float, current_iv: float, baseline_values: dict) -> str:
     """
-    Determines the market bias based on a set of rules.
-    Rule: 4 out of 6 conditions must be true for a Bullish/Bearish bias.
+    Determines the market bias based on comparing current values to a delayed baseline.
+    This provides a stable, "theme of the day" bias.
+    Rule: 3 out of 4 conditions must be true for a Bullish/Bearish bias.
     """
-    if not all([swing_points, latest_price, ema_20]):
+    if not baseline_values or not all([v is not None for v in [current_price, current_delta, current_gamma, current_iv]]):
         return "Neutral"
 
-    # --- Price Rules ---
-    swing_highs = sorted([p['price'] for p in swing_points if p['type'] == 'high'], reverse=True)
-    swing_lows = sorted([p['price'] for p in swing_points if p['type'] == 'low'], reverse=True)
-
-    # 1. Higher Highs (HH)
-    is_hh = len(swing_highs) >= 3 and swing_highs[0] > swing_highs[1] > swing_highs[2]
-    # 2. Higher Lows (HL)
-    is_hl = len(swing_lows) >= 3 and swing_lows[0] > swing_lows[1] > swing_lows[2]
-    # 3. Price vs EMA
-    price_above_ema = latest_price > ema_20
-
-    # --- Greek Rules ---
-    # 4. Delta Slope
-    delta_rising = delta_slope >= 0.01
-    # 5. Gamma Change
-    gamma_rising = gamma_change >= 5.0
-    # 6. IV Trend
-    iv_stable_or_rising = iv_trend >= 0.0
+    # --- Calculate differences from the baseline ---
+    price_from_baseline = current_price - baseline_values.get("price", current_price)
+    delta_from_baseline = current_delta - baseline_values.get("delta", current_delta)
+    gamma_from_baseline = current_gamma - baseline_values.get("gamma", current_gamma)
+    iv_from_baseline = current_iv - baseline_values.get("iv", current_iv)
 
     # --- Bullish Bias Check ---
-    bullish_conditions = [is_hh, is_hl, price_above_ema, delta_rising, gamma_rising, iv_stable_or_rising]
-    if sum(bullish_conditions) >= 4:
+    # For a bullish bias, we expect price, delta, and gamma to rise. IV can be stable or rising.
+    bullish_conditions = [
+        price_from_baseline > 0,
+        delta_from_baseline > 0,
+        gamma_from_baseline > 0,
+        iv_from_baseline >= -0.5 # Allow for minor IV drops
+    ]
+    if sum(bullish_conditions) >= 3:
         return "Bullish"
 
     # --- Bearish Bias Check (Inverse Conditions) ---
-    is_lh = len(swing_highs) >= 3 and swing_highs[0] < swing_highs[1] < swing_highs[2]
-    is_ll = len(swing_lows) >= 3 and swing_lows[0] < swing_lows[1] < swing_lows[2]
-    price_below_ema = latest_price < ema_20
-    delta_falling = delta_slope <= -0.01
-    gamma_falling = gamma_change <= -5.0
-    iv_stable_or_falling = iv_trend <= 0.0
-
-    bearish_conditions = [is_lh, is_ll, price_below_ema, delta_falling, gamma_falling, iv_stable_or_falling]
-    if sum(bearish_conditions) >= 4:
+    # For a bearish bias, we expect price and delta to fall, but gamma and IV (fear) to rise.
+    bearish_conditions = [
+        price_from_baseline < 0,
+        delta_from_baseline < 0,
+        gamma_from_baseline > 0, # Gamma rises with volatility
+        iv_from_baseline > 0.5   # IV (fear) rises
+    ]
+    if sum(bearish_conditions) >= 3:
         return "Bearish"
 
     # --- Neutral Bias ---
     return "Neutral"
 
-import datetime
+def determine_market_type(candles_5min_buffer: list, market_type_window_size: int, settings: dict) -> str:
+    """
+    Determines the market type based on a configurable lookback window.
+    """
+    if len(candles_5min_buffer) < market_type_window_size:
+        return "Undetermined"
 
-def determine_market_type(atr: float, body_ratio: float, delta_stability: float, gamma_change: float, iv_trend: float, settings: dict) -> str:
-    """
-    Determines the market type based on a set of rules.
-    Rule: 3+ conditions must be true for a given market type.
-    """
-    # Get thresholds from settings
-    atr_neutral_max = float(settings.get('atr_neutral_max', 10))
-    atr_trendy_min = float(settings.get('atr_trendy_min', 10))
-    atr_trendy_max = float(settings.get('atr_trendy_max', 18))
+    # These will call new/updated functions in calculations.py
+    atr = calculations.calculate_atr(candles_5min_buffer, period=market_type_window_size)
+    body_ratio_avg = calculations.calculate_average_body_ratio(candles_5min_buffer, window_size=market_type_window_size)
+    # We'll need to add these calculations later
+    # delta_stability = calculations.calculate_delta_stability(delta_buffer, window_size=market_type_window_size)
+    # gamma_change = calculations.calculate_gamma_change_percent(gamma_buffer, num_updates=market_type_window_size * 30) # 30 updates per 5min candle
+    # iv_trend = calculations.calculate_iv_trend(iv_buffer, num_updates=market_type_window_size * 30)
 
     # --- Trendy Market Check ---
+    # Placeholder logic until all calculations are in place
     trendy_conditions = [
-        atr_trendy_min <= atr <= atr_trendy_max,
-        body_ratio >= 0.6,
-        delta_stability < 0.015,
-        gamma_change >= 3.0,
-        iv_trend >= 0.0 # Stable or rising
+        atr > 15, # Example: ATR is expanding
+        body_ratio_avg > 0.5, # Example: Candles have strong bodies
     ]
-    if sum(trendy_conditions) >= 3:
+    if sum(trendy_conditions) >= 2:
         return "Trendy"
 
     # --- Volatile Market Check ---
-    # Volatile is defined as ATR being above the trendy max
     volatile_conditions = [
-        atr > atr_trendy_max,
-        0.3 <= body_ratio < 0.6, # Unstable
-        delta_stability > 0.040,
-        gamma_change > 10.0,
-        iv_trend > 2.0
+        atr > 25, # Example: ATR is very high
+        body_ratio_avg < 0.4, # Example: Candles are indecisive (long wicks)
     ]
-    if sum(volatile_conditions) >= 3:
+    if sum(volatile_conditions) >= 2:
         return "Volatile"
 
-    # --- Neutral/Sideways Market Check ---
-    # Neutral is defined as ATR being below the neutral max
-    neutral_conditions = [
-        atr < atr_neutral_max,
-        -0.005 < delta_stability < 0.005, # Using stability as proxy for flat delta
-        abs(gamma_change) < 2.0,
-        iv_trend <= 0.0 # Stable or dropping
-    ]
-    if sum(neutral_conditions) >= 3:
-        return "Neutral"
+    return "Neutral" # Default if no other type is met
 
-    return "Undetermined"
-
-def detect_entry_setup(market_type: str, bias: str, swing_points: list, latest_price: float, body_ratio: float, signal_premium: float) -> dict | None:
+def detect_entry_setup(bias: str, market_type: str, candles_5min_buffer: list, latest_price: float, signal_premium: float, settings: dict) -> dict | None:
     """
-    Detects a price-based entry setup based on the current market type and bias.
-    For now, focuses on the Breakout setup for Volatile markets.
+    The new "Four-Layer Entry Engine".
+    This is a placeholder structure. The actual BOS/Retest logic will be built out next.
     """
-    # Guard clause: Only look for entries if bias and market type are favorable.
-    if bias == "Neutral" or market_type not in ["Trendy", "Volatile"] or not signal_premium:
+    # --- Layer 1: Bias Check ---
+    if bias == "Neutral":
         return None
 
-    last_swing_high = max([p['price'] for p in swing_points if p['type'] == 'high'], default=None)
-    last_swing_low = min([p['price'] for p in swing_points if p['type'] == 'low'], default=None)
+    # --- Layer 2: Market Type Check ---
+    if market_type not in ["Trendy", "Volatile"]:
+        return None
 
-    # --- Continuation Entry Logic (for Trendy Market) ---
-    if market_type == "Trendy":
-        # Bullish Continuation: In a bullish trend, we look for a pullback that respects the structure.
-        if bias == "Bullish" and last_swing_low:
-            # Price Rule: Price has pulled back but has not closed below the last swing low.
-            if latest_price > last_swing_low:
-                return {
-                    "type": "Continuation_Bullish",
-                    "price": latest_price,
-                    "status": "Pending_Greek_Confirmation",
-                    "signal_premium": signal_premium
-                }
-        # Bearish Continuation: In a bearish trend, we look for a pullback that respects the structure.
-        if bias == "Bearish" and last_swing_high:
-            # Price Rule: Price has pulled back but has not closed above the last swing high.
-            if latest_price < last_swing_high:
-                return {
-                    "type": "Continuation_Bearish",
-                    "price": latest_price,
-                    "status": "Pending_Greek_Confirmation",
-                    "signal_premium": signal_premium
-                }
+    # --- Layer 3: Price Setup (BOS/Retest) ---
+    # This is where we will call the new `check_bos` and `check_retest` functions
+    # from calculations.py once they are built.
+    price_setup_found = None
+    if market_type == "Trendy" and bias == "Bullish":
+        # price_setup_found = calculations.check_bullish_retest(...)
+        pass
+    elif market_type == "Volatile" and bias == "Bullish":
+        # price_setup_found = calculations.check_bullish_bos(...)
+        pass
+    # ... and so on for Bearish setups
 
-    # --- Breakout Entry Logic (for Volatile Market) ---
-    if market_type == "Volatile":
-        # Bullish Breakout
-        if bias == "Bullish" and last_swing_high:
-            # Rule: Price breaks swing high by >= 0.15%
-            breakout_threshold = last_swing_high * 1.0015
-            # Rule: Breakout candle is large (body >= 60% of range)
-            is_large_candle = body_ratio >= 0.6
+    if not price_setup_found:
+        return None
 
-            if latest_price > breakout_threshold and is_large_candle:
-                return {
-                    "type": "Breakout_Bullish",
-                    "price": latest_price,
-                    "status": "Pending_Greek_Confirmation",
-                    "signal_premium": signal_premium
-                }
+    # --- Layer 4: Smoothed Greek Confirmation ---
+    # This will be handled by the `run_greek_confirmation` job in main.py,
+    # which will check the smoothed greeks.
+    # For now, we just create the candidate.
+    
+    # This is a placeholder return. It will be populated with details from the price setup.
+    return {
+        "type": price_setup_found.get("type"), # e.g., "BOS_Bullish" or "Retest_Bullish"
+        "price": latest_price,
+        "status": "Pending_Greek_Confirmation",
+        "signal_premium": signal_premium,
+        "strike_price": price_setup_found.get("strike_price") # Will need to pass this through
+    }
 
-        # Bearish Breakout
-        if bias == "Bearish" and last_swing_low:
-            # Rule: Price breaks swing low by >= 0.15%
-            breakout_threshold = last_swing_low * 0.9985
-            # Rule: Breakout candle is large (body >= 60% of range)
-            is_large_candle = body_ratio >= 0.6
-
-            if latest_price < breakout_threshold and is_large_candle:
-                return {
-                    "type": "Breakout_Bearish",
-                    "price": latest_price,
-                    "status": "Pending_Greek_Confirmation",
-                    "signal_premium": signal_premium
-                }
-
-        # --- Reversal Entry Logic (also for Volatile Market) ---
-        # Bullish Reversal: Price rejects a key low and shows reversal signs.
-        if bias == "Bullish" and last_swing_low:
-            # Price Rule: Price is near the last swing low, suggesting a test of support.
-            is_near_low = abs(latest_price - last_swing_low) / last_swing_low < 0.001 # within 0.1%
-            # Candle Rule: A small body ratio can indicate a reversal candle (like a pin bar).
-            is_reversal_candle = body_ratio < 0.3
-
-            if is_near_low and is_reversal_candle:
-                return {
-                    "type": "Reversal_Bullish",
-                    "price": latest_price,
-                    "status": "Pending_Greek_Confirmation",
-                    "signal_premium": signal_premium
-                }
-
-        # Bearish Reversal: Price rejects a key high and shows reversal signs.
-        if bias == "Bearish" and last_swing_high:
-            is_near_high = abs(latest_price - last_swing_high) / last_swing_high < 0.001 # within 0.1%
-            is_reversal_candle = body_ratio < 0.3
-
-            if is_near_high and is_reversal_candle:
-                return {
-                    "type": "Reversal_Bearish",
-                    "price": latest_price,
-                    "status": "Pending_Greek_Confirmation",
-                    "signal_premium": signal_premium
-                }
+def confirm_with_greeks(candidate: dict, smoothed_greeks: dict, settings: dict) -> dict:
+    """
+    Confirms a pending setup with live SMOOTHED Greek data.
+    """
+    # This function will be updated to use the new smoothed greeks and settings.
+    # For now, we can just approve it for testing purposes.
+    if candidate and candidate.get("status") == "Pending_Greek_Confirmation":
+        candidate["status"] = "ENTRY_APPROVED"
+        print(f"!!! (Placeholder) ENTRY APPROVED: {candidate['type']} at {candidate['price']} !!!")
     return None
 
-def confirm_with_greeks(candidate: dict, delta_slope: float, gamma_change: float, iv_trend: float, theta_change: float, settings: dict) -> dict:
-    """
-    Confirms a pending setup with live Greek data.
-    """
-    if not candidate or candidate.get("status") != "Pending_Greek_Confirmation":
-        return candidate
-
-    # --- Continuation Confirmation Rules ---
-    if "Continuation" in candidate["type"]:
-        # Get thresholds from settings
-        min_conditions = int(settings.get('cont_conditions_met', 2))
-        delta_thresh = float(settings.get('cont_delta_thresh', 0.01))
-        gamma_thresh = float(settings.get('cont_gamma_thresh', 3.0))
-        iv_thresh = float(settings.get('cont_iv_thresh', 0.0))
-        theta_thresh = float(settings.get('cont_theta_thresh', 5.0))
-
-        conditions_met = 0
-        if candidate["type"] == "Continuation_Bullish":
-            if delta_slope >= delta_thresh: conditions_met += 1
-            if gamma_change >= gamma_thresh: conditions_met += 1
-            if iv_trend >= iv_thresh: conditions_met += 1
-            if theta_change < theta_thresh: conditions_met += 1
-        elif candidate["type"] == "Continuation_Bearish":
-            if delta_slope <= -delta_thresh: conditions_met += 1
-            if gamma_change >= gamma_thresh: conditions_met += 1 # Gamma expansion is good for both
-            if iv_trend >= iv_thresh: conditions_met += 1
-            if theta_change < theta_thresh: conditions_met += 1
-
-        if conditions_met >= min_conditions:
-            candidate["status"] = "ENTRY_APPROVED"
-            print(f"!!! ENTRY APPROVED: {candidate['type']} at {candidate['price']} !!!")
-
-    # --- Reversal Confirmation Rules ---
-    if "Reversal" in candidate["type"]:
-        min_conditions = int(settings.get('rev_conditions_met', 2))
-        delta_flip_thresh = float(settings.get('rev_delta_flip_thresh', 0.02))
-        gamma_drop_thresh = float(settings.get('rev_gamma_drop_thresh', -5.0))
-        iv_drop_thresh = float(settings.get('rev_iv_drop_thresh', -1.0))
-
-        conditions_met = 0
-        # For a bullish reversal, we expect bearish momentum to die.
-        # So, we look for the delta slope to flip from negative to positive.
-        if candidate["type"] == "Reversal_Bullish":
-            if delta_slope >= delta_flip_thresh: conditions_met += 1 # Delta has flipped to positive
-            if gamma_change <= gamma_drop_thresh: conditions_met += 1 # Gamma momentum drops
-            if iv_trend <= iv_drop_thresh: conditions_met += 1 # IV (fear) is dropping
-        # For a bearish reversal, we expect bullish momentum to die.
-        elif candidate["type"] == "Reversal_Bearish":
-            if delta_slope <= -delta_flip_thresh: conditions_met += 1 # Delta has flipped to negative
-            if gamma_change <= gamma_drop_thresh: conditions_met += 1 # Gamma momentum drops
-            if iv_trend <= iv_drop_thresh: conditions_met += 1 # IV (greed) is dropping
-
-        if conditions_met >= min_conditions:
-            candidate["status"] = "ENTRY_APPROVED"
-            print(f"!!! ENTRY APPROVED: {candidate['type']} at {candidate['price']} !!!")
-
-    # --- Breakout Confirmation Rules ---
-    if "Breakout" in candidate["type"]:
-        # Get thresholds from settings
-        min_conditions = int(settings.get('confirm_conditions_met', 2))
-        delta_thresh = float(settings.get('confirm_delta_slope', 0.02))
-        gamma_thresh = float(settings.get('confirm_gamma_change', 8.0))
-        iv_thresh = float(settings.get('confirm_iv_trend', 1.0))
-
-        conditions_met = 0
-        if candidate["type"] == "Breakout_Bullish":
-            if delta_slope >= delta_thresh: conditions_met += 1
-            if gamma_change >= gamma_thresh: conditions_met += 1
-            if iv_trend >= iv_thresh: conditions_met += 1
-        elif candidate["type"] == "Breakout_Bearish":
-            if delta_slope <= -delta_thresh: conditions_met += 1
-            if gamma_change >= gamma_thresh: conditions_met += 1 # Gamma should still expand
-            if iv_trend >= iv_thresh: conditions_met += 1
-
-        if conditions_met >= min_conditions:
-            candidate["status"] = "ENTRY_APPROVED"
-            print(f"!!! ENTRY APPROVED: {candidate['type']} at {candidate['price']} !!!")
-        else:
-            # Optional: Add a counter or timeout to cancel the candidate if not confirmed
-            # For now, it just remains pending.
-            pass
-
-    return candidate
-
-def check_exit_conditions(active_trade: dict, latest_premium: float, delta_slope: float, gamma_change: float, iv_trend: float, settings: dict) -> str | None:
+def check_exit_conditions(active_trade: dict, latest_premium: float, smoothed_greeks: dict, settings: dict) -> str | None:
     """
     Checks if an active trade should be exited based on SL/Target or Greek conditions.
-    
-    Args:
-        active_trade (dict): The active trade object with 'stop_loss' and 'target'.
-        latest_premium (float): The current market price of the option.
-        delta_slope (float): The current slope of delta.
-        gamma_change (float): The current percentage change in gamma.
-        iv_trend (float): The current trend of implied volatility.
-        settings (dict): The application settings.
-
-    Returns:
-        str: A string describing the exit reason, or None if no exit condition is met.
     """
     if not latest_premium:
         return None
@@ -298,24 +141,13 @@ def check_exit_conditions(active_trade: dict, latest_premium: float, delta_slope
     if latest_premium >= active_trade.get('target', float('inf')):
         return f"Target Hit at {latest_premium}"
     
-    # --- Greek-Based Exits ---
-    delta_flip_thresh = float(settings.get('exit_delta_flip_thresh', 0.02))
-    gamma_drop_thresh = float(settings.get('exit_gamma_drop_thresh', -5.0))
-    iv_crush_thresh = float(settings.get('exit_iv_crush_thresh', -1.5))
+    # --- Emergency Greek-Based Exit ---
+    # This will use the new smoothed greeks and settings.
+    iv_crush_thresh = float(settings.get('exit_iv_crush_thresh', -2.0))
+    smoothed_iv_trend = smoothed_greeks.get("iv_trend", 0.0)
 
-    trade_type = active_trade.get("type", "")
-
-    # Delta Reversal Check
-    if "Bullish" in trade_type and delta_slope < -delta_flip_thresh:
-        return "Greek Exit: Delta Reversal"
-    if "Bearish" in trade_type and delta_slope > delta_flip_thresh:
-        return "Greek Exit: Delta Reversal"
-
-    # Gamma Drop and IV Crush Checks
-    if gamma_change < gamma_drop_thresh:
-        return "Greek Exit: Gamma Drop"
-    if iv_trend < iv_crush_thresh:
-        return "Greek Exit: IV Crush"
+    if smoothed_iv_trend < iv_crush_thresh:
+        return f"Emergency Exit: IV Crush (Trend: {smoothed_iv_trend:.2f})"
 
     # --- Time-Based Exit ---
     eod_exit_minutes = int(settings.get('eod_exit_minutes', 60))

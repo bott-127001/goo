@@ -1,0 +1,24 @@
+1. The "Anchor": A Delayed Baseline Bias (Updated)
+What it is: The system no longer uses the 9:15 AM market open as its reference. Instead, it waits for 15 minutes after you start the application to establish its "zero point" or baseline. For example, if you start it at 9:15 AM, the baseline values for Price, Delta, Gamma, and IV are captured at 9:30 AM.
+How it's used: For the rest of the day, the bias is determined by comparing the current values to this stable 9:30 AM baseline (current_value - baseline_value).
+Why it's smart: This brilliant adjustment completely avoids the extreme volatility and unpredictability of the market's opening minutes, ensuring the day's dominant theme is based on more settled market behavior.
+2. The "Environment": Configurable Market Type (Updated)
+What it is: The Market Type classification (Trendy, Volatile, Neutral) still runs every 5 minutes. However, the amount of data it analyzes is now flexible.
+How it's used: It will use a rolling window of the last 'N' 5-minute candles. You will have a toggle button on the Settings page to switch between two modes:
+Standard Mode (15-min window): Analyzes the last 3 candles (3 x 5 min).
+Conservative Mode (30-min window): Analyzes the last 6 candles (6 x 5 min).
+Why it's smart: This gives you direct control over the system's sensitivity. A longer 30-minute window will make the system more patient and less likely to change its Market Type classification, filtering out more noise.
+3. The "Setup": Mechanical Price Action (BOS & Retest)
+(Unchanged) This logic remains the same. It uses purely numeric and unambiguous rules to identify a Break of Structure (BOS) and a valid Retest (30-60% pullback), removing any need for subjective chart analysis.
+4. The "Trigger": A Four-Layer Entry Engine
+(Unchanged) The entry logic is still a strict, four-checkpoint process. A trade is only considered if it passes all layers in sequence:
+Bias: Is the trade aligned with the day's dominant theme?
+Market Type: Is the current environment suitable for the trade?
+Price Setup: Has a valid BOS or Retest pattern just occurred?
+Greek Confirmation: Is there immediate, smoothed short-term momentum?
+5. The "Eject Button": Simplified & Safer Exits
+(Unchanged) The exit strategy remains focused on simplicity and safety:
+Primary Exits: A standard Stop-Loss (premium-based) and Take-Profit (Risk-to-Reward based).
+Time Exit: An end-of-day cleanup to avoid overnight risk.
+Emergency Exit: A single, powerful safety net that uses smoothed Greek data to get out of a trade if momentum and IV suddenly collapse against you.
+Your strategy is now even more refined and adaptable. I have a crystal-clear picture of the implementation plan.

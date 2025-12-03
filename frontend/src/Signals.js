@@ -41,93 +41,24 @@ const Signals = () => {
     return () => clearInterval(interval);
   }, [location.search]);
 
-  const renderChecklist = (title, rules) => (
+  const renderChecklist = (title, conditions) => {
+    if (!conditions) return null;
+    return (
     <div className="checklist-container">
       <h3>{title}</h3>
       <ul>
-        {Object.entries(rules).map(([rule, result]) => (
-          <li key={rule} className={result ? 'passed' : 'failed'}>
+        {Object.entries(conditions).map(([rule, result]) => (
+          <li key={rule} className={result === true ? 'passed' : (result === false ? 'failed' : '')}>
             {result ? '✔' : '✖'} {rule}
           </li>
         ))}
       </ul>
     </div>
-  );
+  )};
 
   if (!status || !signals) {
     return <div>Loading signals...</div>;
   }
-
-  // --- Recreate logic from backend to show checklist status ---
-  const swing_highs = signals.swing_points?.filter(p => p.type === 'high').sort((a, b) => b.price - a.price) || [];
-  const swing_lows = signals.swing_points?.filter(p => p.type === 'low').sort((a, b) => b.price - a.price) || [];
-
-  const biasBullishRules = {
-    'Is Higher High': swing_highs.length >= 3 && swing_highs[0].price > swing_highs[1].price && swing_highs[1].price > swing_highs[2].price,
-    'Is Higher Low': swing_lows.length >= 3 && swing_lows[0].price > swing_lows[1].price && swing_lows[1].price > swing_lows[2].price,
-    'Price > 20 EMA': signals.latest_price > signals.ema_20,
-    'Delta Slope Rising (>= 0.01)': signals.delta_slope >= 0.01,
-    'Gamma Change Rising (>= 5%)': signals.gamma_change_percent >= 5.0,
-    'IV Trend Stable/Rising (>= 0)': signals.iv_trend >= 0.0,
-  };
-
-  const biasBearishRules = {
-    'Is Lower High': swing_highs.length >= 3 && swing_highs[0].price < swing_highs[1].price && swing_highs[1].price < swing_highs[2].price,
-    'Is Lower Low': swing_lows.length >= 3 && swing_lows[0].price < swing_lows[1].price && swing_lows[1].price < swing_lows[2].price,
-    'Price < 20 EMA': signals.latest_price < signals.ema_20,
-    'Delta Slope Falling (<= -0.01)': signals.delta_slope <= -0.01,
-    'Gamma Change Falling (<= -5%)': signals.gamma_change_percent <= -5.0,
-    'IV Trend Stable/Falling (<= 0)': signals.iv_trend <= 0.0,
-  };
-
-  const marketTrendyRules = {
-    'ATR (10-18)': signals.atr_14 >= 10 && signals.atr_14 <= 18,
-    'Body Ratio (>= 60%)': signals.latest_candle_body_ratio >= 0.6,
-    'Delta Stability (< 0.015)': signals.delta_stability < 0.015,
-    'Gamma Change (>= 3%)': signals.gamma_change_percent >= 3.0,
-    'IV Trend (>= 0)': signals.iv_trend >= 0.0,
-  };
-
-  const marketVolatileRules = {
-    'ATR (> 18)': signals.atr_14 > 18,
-    'Body Ratio (30-60%)': signals.latest_candle_body_ratio >= 0.3 && signals.latest_candle_body_ratio < 0.6,
-    'Delta Stability (> 0.040)': signals.delta_stability > 0.040,
-    'Gamma Change (> 10%)': signals.gamma_change_percent > 10.0,
-    'IV Trend (> 2.0)': signals.iv_trend > 2.0,
-  };
-
-  const entryContinuationRules = {
-    'Market Type is "Trendy"': status.market_type === 'Trendy',
-    '(Bullish) Price > Last Swing Low': status.bias === 'Bullish' && signals.latest_price > signals.last_swing_low,
-    '(Bearish) Price < Last Swing High': status.bias === 'Bearish' && signals.latest_price < signals.last_swing_high,
-    '--- Greek Confirmation ---': '---',
-    'Delta Slope Confirms': '...',
-    'Gamma Change Confirms': '...',
-    'IV Trend Confirms': '...',
-    'Theta Change OK': '...',
-  };
-
-  const entryBreakoutRules = {
-    'Market Type is "Volatile"': status.market_type === 'Volatile',
-    '(Bullish) Price > Breakout Threshold': status.bias === 'Bullish' && signals.last_swing_high && signals.latest_price > (signals.last_swing_high * 1.0015),
-    '(Bearish) Price < Breakout Threshold': status.bias === 'Bearish' && signals.last_swing_low && signals.latest_price < (signals.last_swing_low * 0.9985),
-    'Breakout Candle Body >= 60%': signals.latest_candle_body_ratio >= 0.6,
-    '--- Greek Confirmation ---': '---',
-    'Delta Slope Confirms': '...',
-    'Gamma Change Confirms': '...',
-    'IV Trend Confirms': '...',
-  };
-
-  const entryReversalRules = {
-    'Market Type is "Volatile"': status.market_type === 'Volatile',
-    '(Bullish) Price Near Last Swing Low': status.bias === 'Bullish' && signals.last_swing_low && Math.abs(signals.latest_price - signals.last_swing_low) / signals.last_swing_low < 0.001,
-    '(Bearish) Price Near Last Swing High': status.bias === 'Bearish' && signals.last_swing_high && Math.abs(signals.latest_price - signals.last_swing_high) / signals.last_swing_high < 0.001,
-    'Reversal Candle Body < 30%': signals.latest_candle_body_ratio < 0.3,
-    '--- Greek Confirmation ---': '---',
-    'Delta Slope Flipped': '...',
-    'Gamma Change Dropped': '...',
-    'IV Trend Dropped': '...',
-  };
 
   return (
     <div className="signals-page">
@@ -136,13 +67,55 @@ const Signals = () => {
       </div>
 
       <div className="checklists-grid">
-        {renderChecklist('Bias: Bullish Conditions', biasBullishRules)}
-        {renderChecklist('Bias: Bearish Conditions', biasBearishRules)}
-        {renderChecklist('Market Type: Trendy Conditions', marketTrendyRules)}
-        {renderChecklist('Market Type: Volatile Conditions', marketVolatileRules)}
-        {renderChecklist('Entry: Continuation Setup', entryContinuationRules)}
-        {renderChecklist('Entry: Breakout Setup', entryBreakoutRules)}
-        {renderChecklist('Entry: Reversal Setup', entryReversalRules)}
+        {/* Layer 1: Bias */}
+        <div className="checklist-container">
+          <h3>Layer 1: Day-Open Bias ({status.bias})</h3>
+          {signals.bias_details ? (
+            <ul>
+              <li>Price from Baseline: {signals.bias_details.price_from_baseline}</li>
+              <li>Delta from Baseline: {signals.bias_details.delta_from_baseline}</li>
+              {renderChecklist('Bullish Conditions', signals.bias_details.bullish_conditions)}
+              {renderChecklist('Bearish Conditions', signals.bias_details.bearish_conditions)}
+            </ul>
+          ) : <li>Baseline not set yet.</li>}
+        </div>
+
+        {/* Layer 2: Market Type */}
+        <div className="checklist-container">
+          <h3>Layer 2: Market Type ({status.market_type})</h3>
+          {signals.market_type_details ? (
+            <ul>
+              <li>ATR: {signals.market_type_details.atr}</li>
+              <li>Avg. Body Ratio: {signals.market_type_details.body_ratio_avg}</li>
+              {renderChecklist('Trendy Conditions', signals.market_type_details.trendy_conditions)}
+              {renderChecklist('Volatile Conditions', signals.market_type_details.volatile_conditions)}
+            </ul>
+          ) : <li>Calculating...</li>}
+        </div>
+
+        {/* Layer 3: Price Action */}
+        <div className="checklist-container">
+          <h3>Layer 3: Price Action Setup</h3>
+          {signals.price_action_details ? (
+            <ul>
+              <li>Status: {signals.price_action_details.status}</li>
+              <li>Details: {signals.price_action_details.details}</li>
+            </ul>
+          ) : <li>Monitoring...</li>}
+        </div>
+
+        {/* Layer 4: Greek Confirmation */}
+        <div className="checklist-container">
+          <h3>Layer 4: Live Greek Confirmation</h3>
+          {signals.greek_confirmation_details ? (
+            <ul>
+              <li>Smoothed Delta Slope (30s): {signals.greek_confirmation_details.smoothed_delta_slope}</li>
+              <li>Smoothed Gamma Change (30s): {signals.greek_confirmation_details.smoothed_gamma_change}</li>
+              <li>Smoothed IV Trend (30s): {signals.greek_confirmation_details.smoothed_iv_trend}</li>
+              <li>Smoothed Theta Change (30s): {signals.greek_confirmation_details.smoothed_theta_change}</li>
+            </ul>
+          ) : <li>Calculating...</li>}
+        </div>
       </div>
     </div>
   );

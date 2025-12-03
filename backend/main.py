@@ -117,6 +117,21 @@ def fetch_and_store_data(user_name: str):
         print(f"[{user_name}] Fetched Price: {underlying_price:.2f} | "
               f"Monitoring Strike: {target_strike_data['strike_price']} | "
               f"Delta: {call_greeks.get('delta')}")
+
+        # --- Delayed Baseline Capture Logic ---
+        if not user_state.get("baseline_set") and user_state.get("login_timestamp"):
+            # Check if 15 minutes have passed since login
+            if datetime.datetime.now() - user_state["login_timestamp"] >= datetime.timedelta(minutes=15):
+                user_state["baseline_values"] = {
+                    "price": underlying_price,
+                    "delta": call_greeks.get('delta'),
+                    "gamma": call_greeks.get('gamma'),
+                    "iv": call_greeks.get('iv')
+                }
+                user_state["baseline_timestamp"] = datetime.datetime.now()
+                user_state["baseline_set"] = True
+                print(f"!!! [{user_name}] BASELINE CAPTURED at {user_state['baseline_timestamp']} !!!")
+                print(f"Baseline values: {user_state['baseline_values']}")
     else:
         print(f"[{user_name}] Could not find 2nd OTM strike.")
 
@@ -196,6 +211,9 @@ def run_greek_confirmation(user_name: str):
             # Clear the active signal and enter cooldown
             user_state["candidate_setup"] = None
             settings = database.get_settings()
+            # Temporarily store the exit reason for the WebSocket to broadcast
+            user_state["last_exit_reason"] = exit_reason
+
             cooldown_minutes = int(settings.get('cooldown_minutes', 15))
             user_state["cooldown_until"] = now + datetime.timedelta(minutes=cooldown_minutes)
             print(f"[{user_name}] Trade closed. Entering cooldown until {user_state['cooldown_until']}")
@@ -327,6 +345,9 @@ def start_user_scheduler(user_name: str):
         print(f"Scheduler for {user_name} already running or user state not found.")
         return
 
+    # Set the login timestamp when the scheduler starts
+    user_state["login_timestamp"] = datetime.datetime.now()
+
     scheduler = BackgroundScheduler()
     # Use functools.partial to pass the user_name to the job functions
     scheduler.add_job(functools.partial(fetch_and_store_data, user_name), 'interval', seconds=10, id=f'data_fetch_{user_name}')
@@ -335,7 +356,7 @@ def start_user_scheduler(user_name: str):
     scheduler.add_job(functools.partial(run_logic_controller, user_name), 'cron', minute='*/5', second='10', id=f'logic_{user_name}')
     scheduler.start()
     user_state["scheduler"] = scheduler
-    print(f"Background scheduler started for user: {user_name}")
+    print(f"Background scheduler started for user: {user_name} at {user_state['login_timestamp']}")
 
 @app.on_event("startup")
 def startup_event():
@@ -374,37 +395,64 @@ def get_signals(user_name: str = None):
     if not user_state:
         return {"error": f"No data for user: {user_name}"}
 
-    delta_slope = calculations.calculate_delta_slope(user_state["delta_buffer"])
-    gamma_change_percent = calculations.calculate_gamma_change_percent(user_state["gamma_buffer"])
-    iv_trend = calculations.calculate_iv_trend(user_state["iv_buffer"])
-    delta_stability = calculations.calculate_delta_stability(user_state["delta_buffer"])
-    theta_change_percent = calculations.calculate_theta_change_percent(user_state["theta_buffer"])
-    
-    ema_20 = calculations.calculate_ema(user_state["candles_5min_buffer"])
-    atr_14 = calculations.calculate_atr(user_state["candles_5min_buffer"])
-    
-    swing_points = calculations.find_swing_points(user_state["candles_5min_buffer"])
-    body_ratio = calculations.calculate_body_ratio(user_state["candles_5min_buffer"])
+    # --- New structured signals object ---
+    signals_data = {}
+    settings = database.get_settings()
 
-    # Add latest price for context on the signals page
-    latest_price = user_state["price_buffer"][-1] if user_state["price_buffer"] else 0
-    last_swing_high = max([p['price'] for p in swing_points if p['type'] == 'high'], default=None)
-    last_swing_low = min([p['price'] for p in swing_points if p['type'] == 'low'], default=None)
+    # --- 1. Bias Details ---
+    if user_state.get("baseline_set"):
+        baseline_values = user_state["baseline_values"]
+        current_price = user_state["price_buffer"][-1] if user_state["price_buffer"] else None
+        current_delta = user_state["delta_buffer"][-1] if user_state["delta_buffer"] else None
+        
+        price_from_baseline = current_price - baseline_values.get("price", current_price) if current_price else 0
+        delta_from_baseline = current_delta - baseline_values.get("delta", current_delta) if current_delta else 0
 
-    return {
-        "delta_slope": delta_slope,
-        "gamma_change_percent": gamma_change_percent,
-        "iv_trend": iv_trend,
-        "delta_stability": delta_stability,
-        "theta_change_percent": theta_change_percent,
-        "ema_20": ema_20,
-        "atr_14": atr_14,
-        "swing_points": swing_points,
-        "latest_candle_body_ratio": body_ratio,
-        "latest_price": latest_price,
-        "last_swing_high": last_swing_high,
-        "last_swing_low": last_swing_low,
+        signals_data["bias_details"] = {
+            "price_from_baseline": f"{price_from_baseline:.2f}",
+            "delta_from_baseline": f"{delta_from_baseline:.4f}",
+            "bullish_conditions": {
+                "Price > Baseline": price_from_baseline > 0,
+                "Delta > Baseline": delta_from_baseline > 0,
+            },
+            "bearish_conditions": {
+                "Price < Baseline": price_from_baseline < 0,
+                "Delta < Baseline": delta_from_baseline < 0,
+            }
+        }
+
+    # --- 2. Market Type Details ---
+    window_size = int(user_state.get("market_type_window_size", 3))
+    atr = calculations.calculate_atr(user_state["candles_5min_buffer"], period=window_size)
+    body_ratio_avg = calculations.calculate_average_body_ratio(user_state["candles_5min_buffer"], window_size=window_size)
+    signals_data["market_type_details"] = {
+        "atr": f"{atr:.2f}",
+        "body_ratio_avg": f"{body_ratio_avg:.2f}",
+        "trendy_conditions": {
+            f"ATR ({window_size}-p) > 15": atr > 15,
+            f"Avg Body Ratio ({window_size}-p) > 0.5": body_ratio_avg > 0.5,
+        },
+        "volatile_conditions": {
+            f"ATR ({window_size}-p) > 25": atr > 25,
+            f"Avg Body Ratio ({window_size}-p) < 0.4": body_ratio_avg < 0.4,
+        }
     }
+
+    # --- 3. Price Action Details (Placeholder) ---
+    signals_data["price_action_details"] = {
+        "status": "Monitoring...",
+        "details": "Waiting for BOS or Retest signal."
+    }
+
+    # --- 4. Greek Confirmation Details ---
+    signals_data["greek_confirmation_details"] = {
+        "smoothed_delta_slope": f"{calculations.calculate_smoothed_slope(user_state['delta_buffer'], 30):.4f}",
+        "smoothed_gamma_change": f"{calculations.calculate_smoothed_percent_change(user_state['gamma_buffer'], 30):.2f}%",
+        "smoothed_iv_trend": f"{calculations.calculate_smoothed_slope(user_state['iv_buffer'], 30):.4f}",
+        "smoothed_theta_change": f"{calculations.calculate_smoothed_percent_change(user_state['theta_buffer'], 30):.2f}%",
+    }
+
+    return signals_data
 
 @api_router.get("/status")
 def get_system_status():

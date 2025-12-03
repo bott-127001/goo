@@ -44,20 +44,14 @@ const Dashboard = () => {
         setMarket({ nifty_price: data.nifty_price });
         setGreeks({ delta: data.delta, gamma: data.gamma, theta: data.theta, iv: data.iv });
   
-        // Logic to show the final result of a closed trade for a few seconds
-        if (!data.candidate_setup && previousSignalRef.current?.status === 'ENTRY_APPROVED') {
-          // A trade was just closed. Fetch the final result.
-          fetch(`${apiBaseUrl}/tradelogs`)
-            .then(res => res.json())
-            .then(logs => {
-              const lastLog = logs.find(log => log.id === previousSignalRef.current.log_id);
-              if (lastLog) {
-                setSignal({ type: 'CLOSED', status: lastLog.result });
-                // Clear the "CLOSED" message after 10 seconds
-                setTimeout(() => setSignal(null), 10000);
-              }
-            });
+        // New, simpler logic to show the final result of a closed trade
+        if (data.last_exit_reason) {
+          // If the backend sends a last_exit_reason, a trade was just closed.
+          setSignal({ type: 'CLOSED', status: data.last_exit_reason });
+          // Clear the "CLOSED" message after 10 seconds
+          setTimeout(() => setSignal(null), 10000);
         } else {
+          // Otherwise, just show the current candidate setup
           setSignal(data.candidate_setup);
         }
         previousSignalRef.current = data.candidate_setup;

@@ -5,27 +5,18 @@ const Settings = () => {
   const [settings, setSettings] = useState({
     risk_reward_ratio: '',
     risk_percent: '',
-    cooldown_minutes: '',
-    confirm_delta_slope: '',
-    confirm_gamma_change: '',
-    confirm_iv_trend: '',
-    confirm_conditions_met: '',
-    atr_neutral_max: '',
-    atr_trendy_min: '',
-    atr_trendy_max: '',
-    cont_delta_thresh: '',
-    cont_gamma_thresh: '',
-    cont_iv_thresh: '',
-    cont_theta_thresh: '',
-    cont_conditions_met: '',
-    rev_delta_flip_thresh: '',
-    rev_gamma_drop_thresh: '',
-    rev_iv_drop_thresh: '',
-    rev_conditions_met: '',
-    exit_delta_flip_thresh: '',
-    exit_gamma_drop_thresh: '',
+    cooldown_minutes: '', // Kept this one
+    eod_exit_minutes: '', // Kept this one
+    // --- New Strategy Settings ---
+    market_type_window_size: '3', // Default to 3 (15-min)
+    bos_buffer_points: '',
+    retest_min_percent: '',
+    retest_max_percent: '',
+    entry_delta_slope_thresh: '',
+    entry_gamma_change_thresh: '',
+    entry_iv_trend_thresh: '',
+    entry_theta_max_spike: '',
     exit_iv_crush_thresh: '',
-    eod_exit_minutes: ''
   });
   const [message, setMessage] = useState('');
 
@@ -93,109 +84,67 @@ const Settings = () => {
           <input type="number" id="eod_exit_minutes" name="eod_exit_minutes" value={settings.eod_exit_minutes} onChange={handleInputChange} />
           <button onClick={() => handleSave('eod_exit_minutes')}>Save</button>
         </div>
-        <div className="form-group-divider">Greek Exit Thresholds</div>
+
+        <div className="form-group-divider">Market Type Settings</div>
         <div className="form-group">
-          <label htmlFor="exit_delta_flip_thresh">Exit on Delta Flip</label>
-          <input type="number" step="0.01" id="exit_delta_flip_thresh" name="exit_delta_flip_thresh" value={settings.exit_delta_flip_thresh} onChange={handleInputChange} />
-          <button onClick={() => handleSave('exit_delta_flip_thresh')}>Save</button>
+          <label>Market Type Window Size</label>
+          <div className="radio-group">
+            <input type="radio" id="market_type_15min" name="market_type_window_size" value="3" checked={settings.market_type_window_size === '3'} onChange={handleInputChange} />
+            <label htmlFor="market_type_15min">15-min (3 candles)</label>
+            <input type="radio" id="market_type_30min" name="market_type_window_size" value="6" checked={settings.market_type_window_size === '6'} onChange={handleInputChange} />
+            <label htmlFor="market_type_30min">30-min (6 candles)</label>
+          </div>
+          <button onClick={() => handleSave('market_type_window_size')}>Save</button>
+        </div>
+
+        <div className="form-group-divider">Price Action (BOS/Retest) Settings</div>
+        <div className="form-group">
+          <label htmlFor="bos_buffer_points">BOS Buffer Points</label>
+          <input type="number" step="1" id="bos_buffer_points" name="bos_buffer_points" value={settings.bos_buffer_points} onChange={handleInputChange} />
+          <button onClick={() => handleSave('bos_buffer_points')}>Save</button>
         </div>
         <div className="form-group">
-          <label htmlFor="exit_gamma_drop_thresh">Exit on Gamma Drop (%)</label>
-          <input type="number" step="0.1" id="exit_gamma_drop_thresh" name="exit_gamma_drop_thresh" value={settings.exit_gamma_drop_thresh} onChange={handleInputChange} />
-          <button onClick={() => handleSave('exit_gamma_drop_thresh')}>Save</button>
+          <label htmlFor="retest_min_percent">Retest Min %</label>
+          <input type="number" step="1" id="retest_min_percent" name="retest_min_percent" value={settings.retest_min_percent} onChange={handleInputChange} />
+          <button onClick={() => handleSave('retest_min_percent')}>Save</button>
         </div>
         <div className="form-group">
-          <label htmlFor="exit_iv_crush_thresh">Exit on IV Crush</label>
+          <label htmlFor="retest_max_percent">Retest Max %</label>
+          <input type="number" step="1" id="retest_max_percent" name="retest_max_percent" value={settings.retest_max_percent} onChange={handleInputChange} />
+          <button onClick={() => handleSave('retest_max_percent')}>Save</button>
+        </div>
+
+        <div className="form-group-divider">Entry Greek Confirmation Thresholds</div>
+        <div className="form-group">
+          <label htmlFor="entry_delta_slope_thresh">Delta Slope (min)</label>
+          <input type="number" step="0.01" id="entry_delta_slope_thresh" name="entry_delta_slope_thresh" value={settings.entry_delta_slope_thresh} onChange={handleInputChange} />
+          <button onClick={() => handleSave('entry_delta_slope_thresh')}>Save</button>
+        </div>
+        <div className="form-group">
+          <label htmlFor="entry_gamma_change_thresh">Gamma Change % (min)</label>
+          <input type="number" step="0.1" id="entry_gamma_change_thresh" name="entry_gamma_change_thresh" value={settings.entry_gamma_change_thresh} onChange={handleInputChange} />
+          <button onClick={() => handleSave('entry_gamma_change_thresh')}>Save</button>
+        </div>
+        <div className="form-group">
+          <label htmlFor="entry_iv_trend_thresh">IV Trend (min)</label>
+          <input type="number" step="0.1" id="entry_iv_trend_thresh" name="entry_iv_trend_thresh" value={settings.entry_iv_trend_thresh} onChange={handleInputChange} />
+          <button onClick={() => handleSave('entry_iv_trend_thresh')}>Save</button>
+        </div>
+        <div className="form-group">
+          <label htmlFor="entry_theta_max_spike">Theta Max Spike (abs)</label>
+          <input type="number" step="0.1" id="entry_theta_max_spike" name="entry_theta_max_spike" value={settings.entry_theta_max_spike} onChange={handleInputChange} />
+          <button onClick={() => handleSave('entry_theta_max_spike')}>Save</button>
+        </div>
+        <div className="form-group-divider">Emergency Exit Thresholds</div>
+        <div className="form-group">
+          <label htmlFor="exit_iv_crush_thresh">Emergency IV Crush (min)</label>
           <input type="number" step="0.1" id="exit_iv_crush_thresh" name="exit_iv_crush_thresh" value={settings.exit_iv_crush_thresh} onChange={handleInputChange} />
           <button onClick={() => handleSave('exit_iv_crush_thresh')}>Save</button>
-        </div>
-        <div className="form-group-divider">Greek Confirmation Thresholds</div>
-        <div className="form-group">
-          <label htmlFor="confirm_delta_slope">Delta Slope</label>
-          <input type="number" step="0.01" id="confirm_delta_slope" name="confirm_delta_slope" value={settings.confirm_delta_slope} onChange={handleInputChange} />
-          <button onClick={() => handleSave('confirm_delta_slope')}>Save</button>
-        </div>
-        <div className="form-group">
-          <label htmlFor="confirm_gamma_change">Gamma Change (%)</label>
-          <input type="number" step="0.1" id="confirm_gamma_change" name="confirm_gamma_change" value={settings.confirm_gamma_change} onChange={handleInputChange} />
-          <button onClick={() => handleSave('confirm_gamma_change')}>Save</button>
-        </div>
-        <div className="form-group">
-          <label htmlFor="confirm_iv_trend">IV Trend</label>
-          <input type="number" step="0.1" id="confirm_iv_trend" name="confirm_iv_trend" value={settings.confirm_iv_trend} onChange={handleInputChange} />
-          <button onClick={() => handleSave('confirm_iv_trend')}>Save</button>
-        </div>
-        <div className="form-group">
-          <label htmlFor="confirm_conditions_met">Conditions to Meet</label>
-          <input type="number" step="1" id="confirm_conditions_met" name="confirm_conditions_met" value={settings.confirm_conditions_met} onChange={handleInputChange} />
-          <button onClick={() => handleSave('confirm_conditions_met')}>Save</button>
-        </div>
-        <div className="form-group-divider">Continuation Entry Thresholds</div>
-        <div className="form-group">
-          <label htmlFor="cont_delta_thresh">Continuation Delta Slope</label>
-          <input type="number" step="0.01" id="cont_delta_thresh" name="cont_delta_thresh" value={settings.cont_delta_thresh} onChange={handleInputChange} />
-          <button onClick={() => handleSave('cont_delta_thresh')}>Save</button>
-        </div>
-        <div className="form-group">
-          <label htmlFor="cont_gamma_thresh">Continuation Gamma Change (%)</label>
-          <input type="number" step="0.1" id="cont_gamma_thresh" name="cont_gamma_thresh" value={settings.cont_gamma_thresh} onChange={handleInputChange} />
-          <button onClick={() => handleSave('cont_gamma_thresh')}>Save</button>
-        </div>
-        <div className="form-group">
-          <label htmlFor="cont_iv_thresh">Continuation IV Trend</label>
-          <input type="number" step="0.1" id="cont_iv_thresh" name="cont_iv_thresh" value={settings.cont_iv_thresh} onChange={handleInputChange} />
-          <button onClick={() => handleSave('cont_iv_thresh')}>Save</button>
-        </div>
-        <div className="form-group">
-          <label htmlFor="cont_theta_thresh">Continuation Theta Change (%)</label>
-          <input type="number" step="0.1" id="cont_theta_thresh" name="cont_theta_thresh" value={settings.cont_theta_thresh} onChange={handleInputChange} />
-          <button onClick={() => handleSave('cont_theta_thresh')}>Save</button>
-        </div>
-        <div className="form-group">
-          <label htmlFor="cont_conditions_met">Continuation Conditions to Meet</label>
-          <input type="number" step="1" id="cont_conditions_met" name="cont_conditions_met" value={settings.cont_conditions_met} onChange={handleInputChange} />
-          <button onClick={() => handleSave('cont_conditions_met')}>Save</button>
-        </div>
-        <div className="form-group-divider">Reversal Entry Thresholds</div>
-        <div className="form-group">
-          <label htmlFor="rev_delta_flip_thresh">Reversal Delta Flip</label>
-          <input type="number" step="0.01" id="rev_delta_flip_thresh" name="rev_delta_flip_thresh" value={settings.rev_delta_flip_thresh} onChange={handleInputChange} />
-          <button onClick={() => handleSave('rev_delta_flip_thresh')}>Save</button>
-        </div>
-        <div className="form-group">
-          <label htmlFor="rev_gamma_drop_thresh">Reversal Gamma Drop (%)</label>
-          <input type="number" step="0.1" id="rev_gamma_drop_thresh" name="rev_gamma_drop_thresh" value={settings.rev_gamma_drop_thresh} onChange={handleInputChange} />
-          <button onClick={() => handleSave('rev_gamma_drop_thresh')}>Save</button>
-        </div>
-        <div className="form-group">
-          <label htmlFor="rev_iv_drop_thresh">Reversal IV Drop</label>
-          <input type="number" step="0.1" id="rev_iv_drop_thresh" name="rev_iv_drop_thresh" value={settings.rev_iv_drop_thresh} onChange={handleInputChange} />
-          <button onClick={() => handleSave('rev_iv_drop_thresh')}>Save</button>
-        </div>
-        <div className="form-group">
-          <label htmlFor="rev_conditions_met">Reversal Conditions to Meet</label>
-          <input type="number" step="1" id="rev_conditions_met" name="rev_conditions_met" value={settings.rev_conditions_met} onChange={handleInputChange} />
-          <button onClick={() => handleSave('rev_conditions_met')}>Save</button>
-        </div>
-        <div className="form-group-divider">Market Type Thresholds (ATR)</div>
-        <div className="form-group">
-          <label htmlFor="atr_neutral_max">Neutral Max ATR</label>
-          <input type="number" step="1" id="atr_neutral_max" name="atr_neutral_max" value={settings.atr_neutral_max} onChange={handleInputChange} />
-          <button onClick={() => handleSave('atr_neutral_max')}>Save</button>
-        </div>
-        <div className="form-group">
-          <label htmlFor="atr_trendy_min">Trendy Min ATR</label>
-          <input type="number" step="1" id="atr_trendy_min" name="atr_trendy_min" value={settings.atr_trendy_min} onChange={handleInputChange} />
-          <button onClick={() => handleSave('atr_trendy_min')}>Save</button>
-        </div>
-        <div className="form-group">
-          <label htmlFor="atr_trendy_max">Trendy Max ATR</label>
-          <input type="number" step="1" id="atr_trendy_max" name="atr_trendy_max" value={settings.atr_trendy_max} onChange={handleInputChange} />
-          <button onClick={() => handleSave('atr_trendy_max')}>Save</button>
         </div>
       </div>
     </div>
   );
 };
+
 
 export default Settings;

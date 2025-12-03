@@ -2,6 +2,50 @@ from collections import deque
 import numpy as np
 import pandas as pd
 
+# --- New Smoothed Greek Calculation Functions ---
+
+def calculate_smoothed_slope(buffer: deque, window_seconds: int) -> float:
+    """
+    Generic function to calculate the slope of a value in a buffer over a time window.
+    Assumes data is captured every 10 seconds.
+    """
+    num_updates = window_seconds // 10
+    if len(buffer) < num_updates:
+        return 0.0
+
+    recent_values = list(buffer)[-num_updates:]
+    if any(v is None for v in recent_values):
+        return 0.0
+
+    latest_val = recent_values[-1]
+    earliest_val = recent_values[0]
+
+    slope = (latest_val - earliest_val) / num_updates
+    return slope
+
+def calculate_smoothed_percent_change(buffer: deque, window_seconds: int) -> float:
+    """
+    Generic function to calculate the percentage change of a value in a buffer over a time window.
+    Assumes data is captured every 10 seconds.
+    """
+    num_updates = window_seconds // 10
+    if len(buffer) < num_updates:
+        return 0.0
+
+    recent_values = list(buffer)[-num_updates:]
+    if any(v is None for v in recent_values):
+        return 0.0
+
+    latest_val = recent_values[-1]
+    earliest_val = recent_values[0]
+
+    if earliest_val == 0:
+        return 0.0
+
+    change_percent = ((latest_val - earliest_val) / earliest_val) * 100
+    return change_percent
+
+
 def calculate_delta_slope(delta_buffer: deque, num_updates: int = 5) -> float:
     """
     Calculates the slope of delta over the last few updates.
@@ -129,7 +173,7 @@ def calculate_atr(candles_5min: deque, period: int = 14) -> float:
     
     # Calculate ATR as the simple moving average of TR for the specified period
     atr = tr.rolling(window=period).mean()
-    
+
     # Return the latest ATR value
     if not atr.empty and not pd.isna(atr.iloc[-1]):
         return atr.iloc[-1]
@@ -176,3 +220,54 @@ def calculate_body_ratio(candles_5min: deque) -> float:
     rng = candle_high - candle_low
     
     return body / rng if rng > 0 else 0.0
+
+def calculate_average_body_ratio(candles_5min: deque, window_size: int) -> float:
+    """
+    Calculates the average body-to-range ratio over the last N candles.
+    """
+    if len(candles_5min) < window_size:
+        return 0.0
+    
+    recent_candles = list(candles_5min)[-window_size:]
+    ratios = []
+    for candle in recent_candles:
+        _timestamp, candle_open, candle_high, candle_low, candle_close = candle
+        body = abs(candle_close - candle_open)
+        rng = candle_high - candle_low
+        ratio = body / rng if rng > 0 else 0.0
+        ratios.append(ratio)
+    
+    return sum(ratios) / len(ratios) if ratios else 0.0
+
+# --- New Price Action (BOS/Retest) Functions ---
+# These are placeholders. The actual implementation will be more complex and stateful.
+
+def check_bullish_bos(candles_5min_buffer: list, settings: dict) -> dict | None:
+    """
+    Checks for a Bullish Break of Structure.
+    Placeholder: In a real scenario, this would need more robust logic.
+    """
+    # This is a simplified placeholder.
+    # A real implementation would need to manage the state of the last BOS.
+    return None
+
+def check_bearish_bos(candles_5min_buffer: list, settings: dict) -> dict | None:
+    """
+    Checks for a Bearish Break of Structure.
+    Placeholder.
+    """
+    return None
+
+def check_bullish_retest(candles_5min_buffer: list, last_bos_info: dict, settings: dict) -> dict | None:
+    """
+    Checks for a valid Bullish Retest after a BOS.
+    Placeholder.
+    """
+    return None
+
+def check_bearish_retest(candles_5min_buffer: list, last_bos_info: dict, settings: dict) -> dict | None:
+    """
+    Checks for a valid Bearish Retest after a BOS.
+    Placeholder.
+    """
+    return None
